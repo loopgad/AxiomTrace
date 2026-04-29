@@ -2,11 +2,11 @@
 
 # AxiomTrace v1.0
 
-> MCU Bare-metal Observability Microkernel — Developer-readable, Production-low-disturbance, Fault-traceable, Protocol-freezable, Toolchain-trusted.
+> MCU 裸机可观测微内核 — 开发可读、量产低扰动、故障可追溯、协议可冻结、工具链可信。
 
 ---
 
-## Quick Start (5 Minutes)
+## 快速开始（5 分钟）
 
 ```c
 #include "axiomtrace.h"
@@ -18,16 +18,16 @@ int main(void) {
 }
 ```
 
-## Core Features
+## 核心特性
 
-- **Event Record Entity**: Firmware only contains structured binary events; text/JSON are rendered by host tools.
-- **Zero malloc / Zero printf / Zero blocking**: Hot path O(1), ISR-writable.
-- **Pluggable Backend**: Memory / UART / USB / RTT / SWO / CAN-FD, adding a backend doesn't modify the Core.
-- **Fault Capsule**: 0 Flash writes during normal operation; automatically freezes pre/post windows and commits to Flash after a fault.
-- **Profile Compile-time Pruning**: `DEV` / `FIELD` / `PROD`, `AX_LOG` and `AX_PROBE` automatically expand to empty in production.
-- **C11 `_Generic` Type Safety**: Parameter type errors are captured at compile-time.
+- **Event Record 本体**：固件中只有结构化二进制事件，文本/JSON 由主机工具渲染。
+- **零 malloc / 零 printf / 零阻塞**：热路径 O(1)，ISR 可写。
+- **Backend 可插拔**：Memory / UART / USB / RTT / SWO / CAN-FD，新增后端不修改 Core。
+- **Fault Capsule**：正常运行 0 Flash 写入，故障后自动冻结 pre/post 窗口并 commit 到 Flash。
+- **Profile 编译期裁剪**：`DEV` / `FIELD` / `PROD`，量产时 `AX_LOG` 和 `AX_PROBE` 自动展开为空。
+- **C11 `_Generic` 类型安全**：参数类型错误在编译期捕获。
 
-## Architecture
+## 架构
 
 ```text
 AxiomTrace/
@@ -37,22 +37,22 @@ AxiomTrace/
   Tool Plane       Decoder / Text Render / JSON Export / Golden Test
 ```
 
-## Roadmap
+## 版本路线
 
-| Version | Goal |
+| 版本 | 目标 |
 | :--- | :--- |
-| v0.1-core | Core Provable |
-| v0.2-wire | Wire Format Freezable |
-| v0.3-frontend | Frontend Usable |
-| v0.4-backend | Backend Pluggable |
-| v0.5-probe | Probe Timing Investigation Mature |
-| v0.6-capsule | Fault Capsule Mature |
-| v0.7-toolchain | Toolchain Complete |
-| v0.8-portability | Cross-platform Validation |
+| v0.1-core | Core 可证明 |
+| v0.2-wire | Wire Format 可冻结 |
+| v0.3-frontend | Frontend 可用 |
+| v0.4-backend | Backend 可插拔 |
+| v0.5-probe | Probe 时序探查成熟 |
+| v0.6-capsule | Fault Capsule 成熟 |
+| v0.7-toolchain | Toolchain 完整 |
+| v0.8-portability | 跨平台验证 |
 | v0.9-rc | Release Candidate |
-| v1.0-stable | Stable Release |
+| v1.0-stable | 稳定发布 |
 
-## Build
+## 构建
 
 ```bash
 cmake -B build -S . -DAXIOM_BUILD_TESTS=ON
@@ -60,38 +60,38 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-## Python Toolchain
+## Python 工具链
 
-AxiomTrace provides a Python package for decoding binary logs on the host side.
+AxiomTrace 提供 Python 包用于在主机端解码二进制日志。
 
-### Installation
+### 安装
 
 ```bash
 pip install axiomtrace
 ```
 
-Or install from source:
+或从源码安装:
 
 ```bash
 cd tool
 pip install -e .
 ```
 
-### CLI Usage
+### CLI 使用方法
 
-After installing, the `axiom-decoder` command is available:
+安装后，`axiom-decoder` 命令可用:
 
 ```bash
-# Decode binary log to text
+# 解码二进制日志为文本
 axiom-decoder <input.bin> -o text > output.txt
 
-# Export to JSON
+# 导出为 JSON
 axiom-decoder <input.bin> -o json > output.json
 
-# Use dictionary file for symbolic output
+# 使用字典文件进行符号化输出
 axiom-decoder <input.bin> -d dictionary.json -o text
 
-# Show help
+# 显示帮助
 axiom-decoder --help
 ```
 
@@ -100,13 +100,13 @@ axiom-decoder --help
 ```python
 from axiomtrace_tools.decoder import decode_stream
 
-# Decode binary file
+# 解码二进制文件
 with open("trace.bin", "rb") as f:
     raw = f.read()
 
 frames = decode_stream(raw)
 
-# Process frames
+# 处理帧
 for frame in frames:
     if 'error' in frame:
         print(f"[ERROR: {frame['error']}]")
@@ -114,7 +114,7 @@ for frame in frames:
     print(f"[{frame['seq']:4d}] [{frame['level']:5s}] mod=0x{frame['module_id']:02X} evt=0x{frame['event_id']:04X}")
 ```
 
-## Directory Structure
+## 目录结构
 
 ```text
 baremetal/
@@ -129,6 +129,6 @@ tool/           Python decoder, golden tests, benchmark, scripts
 tests/          Host unit tests
 ```
 
-## License
+## 许可
 
 [LICENSE](LICENSE)

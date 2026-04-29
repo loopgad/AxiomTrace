@@ -1,0 +1,206 @@
+﻿> [English](ROUTE.md) | [简体中文](ROUTE_zh.md)
+
+# AxiomTrace 开发路线图
+
+> 版本：v1.0 | 状态：**执行中** | 更新日期：2026-04-29
+
+---
+
+## v0.1-core — Core 可证明
+
+**目标**：证明最小内核正确。无 malloc、无 printf、无阻塞、O(1)、ISR 可写。
+
+- [x] 仓库目录结构按五平面重组。
+- [x] `PLAN.md` / `ROUTE.md` / `RULES.md` 定稿。
+- [ ] `spec/event_model.md` 定稿（Event Record 语义、Payload 自描述）。
+- [ ] `spec/wire_format.md` 定稿（v1.0 frame 结构）。
+- [ ] `spec/backend_contract.md` 定稿（`axiom_backend_t` 接口）。
+- [ ] `spec/fault_capsule.md` 定稿（capsule 格式与生命周期）。
+- [ ] `spec/api_reference.md` 初稿（Frontend 宏 API）。
+- [ ] 无锁 ISR-safe RAM Ring `axiom_ring.c`。
+- [ ] Event Record 组装 `axiom_event.c`（header + payload_len + payload + crc）。
+- [ ] 二进制编码器 `axiom_encode.c`（`_Generic` 类型分发 + 类型标签）。
+- [ ] CRC-16/CCITT-FALSE 查表 `axiom_crc.c`。
+- [ ] 压缩相对时间戳 `axiom_timestamp.c`。
+- [ ] 级别过滤与丢弃统计 `axiom_filter.c`。
+- [ ] Memory Backend `axiom_backend_memory.c`。
+- [ ] Host Unit Tests：`test_ring.c`、`test_encode.c`、`test_crc.c`、`test_event.c`、`test_filter.c`。
+- [ ] CMake 构建系统适配新目录。
+
+**验收标准**：
+- `ctest` 全部通过。
+- 热路径 `axiom_write()` 周期数可测量且稳定。
+- 无 placeholder 代码。
+
+---
+
+## v0.2-wire — Wire Format 可冻结
+
+**目标**：协议能被长期维护。encoder → frame → decoder → expected.json 完全一致。
+
+- [ ] 冻结 binary frame 字段顺序与大小。
+- [ ] 生成首批 golden frames（覆盖全部 type tag、边界 payload）。
+- [ ] 编写 `expected.json`（decoder 期望输出）。
+- [ ] Python decoder `tool/decoder/axiom_decoder.py`（解析 header/payload/crc）。
+- [ ] decoder 非法帧显式拒绝（返回 `FRAME_INVALID`，不崩溃）。
+- [ ] `tool/golden/update_golden.py`（encoder 生成 bin + expected.json）。
+- [ ] Host regression test：`test_decoder.py` 对 golden frames 全量比对。
+- [ ] 文档更新：`spec/wire_format.md` 标记为 **FROZEN**。
+
+**验收标准**：
+- `encoder -> frame -> decoder -> expected.json` 100% 一致。
+- 篡改 crc、payload_len、version 的非法帧被显式拒绝。
+- 新增 type tag 时 `update_golden.py` 能自动生成对应 golden frame。
+
+---
+
+## v0.3-frontend — Frontend 可用
+
+**目标**：用户真正好上手。5 分钟打出第一条日志。
+
+- [ ] `AX_LOG(msg)` 宏实现（开发可读文本，运行时通过 port 的 `byte_out` 输出文本；PROD profile 展开为空）。
+- [ ] `AX_EVT(level, mod, evt, args...)` 宏实现（结构化事件，`_Generic` 编码）。
+- [ ] `AX_PROBE(tag, value)` 宏实现（高频低扰动探查，可选裁剪）。
+- [ ] `AX_FAULT(mod, evt, args...)` 宏实现（故障追溯，触发 capsule hook）。
+- [ ] `AX_KV(level, mod, evt, "k", v, ...)` 宏实现（轻量键值对）。
+- [ ] `DEV / FIELD / PROD` Profile 编译期裁切宏。
+- [ ] `axiom_frontend.h` 统一入口（自动包含所有 Frontend 宏）。
+- [ ] Example：`example_minimal.c`（3 行代码起步）。
+- [ ] Example：`example_full.c`（多 API 组合 + filter + backend）。
+- [ ] Host tests：各 Profile 下宏展开行为验证。
+
+**验收标准**：
+- `example_minimal.c` 在主机 `gcc` 下零配置编译通过并输出预期结果。
+- `PROD` profile 下 `AX_LOG` / `AX_PROBE` 编译为空，不产生代码/数据。
+- 所有 Frontend API 最终调用同一个 `axiom_write()`。
+
+---
+
+## v0.4-backend — Backend 可插拔
+
+**目标**：外设全兼容，但不绑芯片。新增 backend 零侵入 core。
+
+- [ ] `axiom_backend.c` 注册表与分发器实现。
+- [ ] `axiom_backend_t` 结构体与 `axiom_backend_register()` API。
+- [ ] Memory Backend 完善（ring buffer 区域直接导出）。
+- [ ] UART Backend Template（COBS 编码 + 0x00 delimiter，用户填 UART 发送函数）。
+- [ ] USB CDC Backend Template（bulk IN endpoint，用户填 USB 发送函数）。
+- [ ] RTT Backend Template（SEGGER RTT up-channel，用户填 SEGGER RTT 函数）。
+- [ ] SWO/ITM Backend Template（32-bit stimulus word 流，用户填 ITM 函数）。
+- [ ] CAN-FD Backend Template（帧拆分与 ID 映射，用户填 CAN 发送函数）。
+- [ ] Backend drop callback 与限速机制。
+- [ ] Host tests：`test_backend.c`（注册、dispatch、drop、panic_write）。
+
+**验收标准**：
+- 新增一个 backend 只需：实现 3 个函数 + 调用 `axiom_backend_register()`，不修改 `core/`。
+- backend busy 时返回 `-EAGAIN`，Core 正确累计 drop counter。
+- 所有 template 在主机用 mock 函数编译通过。
+
+---
+
+## v0.5-probe — Probe 时序探查成熟
+
+**目标**：高频信号追踪不扰动业务逻辑。
+
+- [ ] `AX_PROBE(tag, value)` 高频优化（绕过 filter、极简 header、可选无 crc）。
+- [ ] Probe ring 独立缓冲区（与主 ring 隔离，避免探查数据覆盖关键日志）。
+- [ ] Probe 后端：SWO/ITM（推荐，无损输出）。
+- [ ] Probe decoder 支持（将 probe 流还原为时序波形描述）。
+- [ ] Benchmark：probe 写入周期数 < 100 周期（Cortex-M4 @ 80MHz）。
+- [ ] Host tests：probe ring 独立性与覆写策略测试。
+
+**验收标准**：
+- 1000Hz probe 不丢主 ring 事件。
+- probe 数据可通过 decoder 导出为 CSV/JSON 时序。
+
+---
+
+## v0.6-capsule — Fault Capsule 成熟
+
+**目标**：故障可追溯，形成核心差异化。
+
+- [ ] Dual-zone ring 设计（Normal Ring + Capsule Ring）。
+- [ ] `AX_FAULT()` 触发 freeze：拷贝 pre-window 事件到 Capsule Ring。
+- [ ] post-window 事件继续写入 Capsule Ring 直至满或窗口结束。
+- [ ] 寄存器快照：`pc`、`lr`、`sp`、`xpsr`（通过 port 层获取）。
+- [ ] reset reason 记录（通过 port 层获取）。
+- [ ] firmware hash（编译期注入 `__attribute__((section))` 字符串，CRC 校验）。
+- [ ] capsule CRC（覆盖 capsule 全部内容）。
+- [ ] `axiom_capsule_commit()`：将 Capsule Ring 内容写入 Flash（非 ISR）。
+- [ ] `axiom_capsule_present()` / `axiom_capsule_read()` / `axiom_capsule_clear()`。
+- [ ] Flash 掉电恢复测试（擦除中断、写入中断后数据完整性）。
+- [ ] Host tests：`test_capsule.c`（freeze、pre/post 窗口、crc、read/clear）。
+
+**验收标准**：
+- 正常运行 0 Flash 写入。
+- Fault 触发后 capsule 完整可读，pre/post 窗口事件无丢失。
+- 掉电恢复后 capsule 数据通过 CRC 校验。
+
+---
+
+## v0.7-toolchain — Toolchain 完整
+
+**目标**：二进制日志可读、可测、可导出。
+
+- [ ] decoder 完善：支持全部 type tag、capsule 格式、DROP_SUMMARY。
+- [ ] text render：dictionary 模板填充（`"motor current over limit: phase={u8}"`）。
+- [ ] json export：完整事件流导出为 JSON array。
+- [ ] capsule report：HTML/Markdown 格式故障分析报告。
+- [ ] dictionary validator：校验 payload 类型与 dictionary 模板匹配。
+- [ ] `tool/scripts/amalgamate.py`：将 core+frontend+port 合并为单文件 `axiomtrace.h`。
+- [ ] `tool/scripts/extract_dict.py`：从 C 源码/X-Macro 提取 `dictionary.json`。
+- [ ] benchmark 工具：`tool/benchmark/host_benchmark.c` 测量编码/CRC/ring write 周期。
+- [ ] golden 回归：CI 自动运行 `update_golden.py` + `test_decoder.py`。
+
+**验收标准**：
+- `binary -> text` 通过全部 golden frames。
+- `binary -> json` 结构正确、字段完整。
+- `capsule -> report` 包含寄存器、事件序列、firmware hash。
+- amalgamate 产物通过全部 host tests。
+
+---
+
+## v0.8-portability — 跨平台验证
+
+**目标**：证明不止能在一种 MCU 上跑。
+
+- [ ] Cortex-M port 完善（DWT_CYCCNT / SysTick / DisableIRQ / Flash HAL hook）。
+- [ ] RISC-V port 完善（mtime / CLINT / 中断控制 / Flash hook）。
+- [ ] Generic port（主机模拟）完善，作为 CI 默认运行环境。
+- [ ] 在至少 2 个真实 MCU 项目（不同厂商）中集成验证。
+- [ ] 集成文档：`docs/porting_guide.md`。
+- [ ] 跨编译器验证：GCC、Clang、IAR（可选）。
+
+**验收标准**：
+- 同一套 `core/` + `frontend/` 代码，只换 `port/` 即可在不同平台编译通过。
+- port 层未覆盖的函数提供弱符号默认实现，编译不报错。
+
+---
+
+## v0.9-rc — Release Candidate
+
+**目标**：不再加功能，只清问题。
+
+- [ ] API review（命名一致性、宏行为一致性、文档与代码一致）。
+- [ ] spec review（所有 spec/*.md 与代码实现逐条核对）。
+- [ ] backend review（全部 template 用 mock 驱动编译通过）。
+- [ ] capsule review（freeze / commit / dump 全路径测试通过）。
+- [ ] benchmark report 定稿（热路径周期数锁定，记录于 `docs/benchmark.md`）。
+- [ ] fuzz malformed frame（自定义 fuzz 目标：随机篡改 frame 各字段，decoder 不崩溃）。
+- [ ] fault injection（模拟 HardFault，验证 capsule 捕获完整性）。
+- [ ] power-loss simulation（Flash 擦除/写入中途断电，重启后 capsule 可恢复）。
+- [ ] docs complete（README、api_reference、porting_guide、examples 注释）。
+- [ ] examples complete（全部独立可编译、可运行、输出符合预期）。
+- [ ] 全量 P0/P1 清零。
+
+---
+
+## v1.0-stable — 稳定发布
+
+**目标**：正式 v1.0。
+
+- [ ] 满足 `PLAN.md` §4 全部发布门槛。
+- [ ] 满足 `RULES.md` §10 全部发布门槛。
+- [ ] 打 git tag：`git tag v1.0-stable`。
+- [ ] 发布 Release Note（含 binary、单文件库 `axiomtrace.h`、decoder、docs）。
+- [ ] 公告：开发可读、量产低扰动、故障可追溯、协议可冻结、工具链可信。

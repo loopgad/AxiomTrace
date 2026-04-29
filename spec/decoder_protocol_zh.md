@@ -1,0 +1,171 @@
+> [English](decoder_protocol.md) | [简体中文](decoder_protocol_zh.md)
+
+# AxiomTrace 解码协议规范
+
+> 版本：v1.0 | 状态：**构建中（v0.7-toolchain 定稿）**
+
+---
+
+## 1. 概述
+
+AxiomTrace 解码器工具链运行在主机（Linux/macOS/Windows）上，将二进制事件记录（Event Records）/ 故障胶囊（Fault Capsules）转换为人类可读的形式。
+
+**组件**：
+
+- `axiom_decoder.py` — 将二进制帧解析为结构化对象
+- `axiom_render.py` — 将结构化对象渲染为文本或 JSON
+- `dict_loader.py` — 加载并校验事件字典
+
+---
+
+## 2. 输入格式
+
+### 2.1 原始二进制流
+
+完整的 v1.0 帧的级联。对于 UART/USB 传输，流采用 COBS 编码，并带有 `0x00` 分隔符。
+
+```bash
+python -m axiom_decoder --input trace.bin --format binary --dict dictionary.json
+```
+
+### 2.2 内存转储
+
+包含环形缓冲区元数据 + 原始环形数据的原始内存转储：
+
+```
+┌─────────────┬─────────────┬─────────────┬─────────────────────────────┐
+│ head (4B LE)│ tail (4B LE)│ cap (4B LE) │ raw ring data (cap bytes)   │
+└─────────────┴─────────────┴─────────────┴─────────────────────────────┘
+```
+
+```bash
+python -m axiom_decoder --input trace_ram.bin --format memory --dict dictionary.json
+```
+
+### 2.3 胶囊二进制文件
+
+提交到 Flash 的故障胶囊。布局请参见 `spec/fault_capsule.md`。
+
+```bash
+python -m axiom_decoder --input capsule.bin --format capsule --dict dictionary.json
+```
+
+---
+
+## 3. 输出格式
+
+### 3.1 文本渲染
+
+默认输出。使用字典模板填充占位符：
+
+```
+[00:00:01.234] [INFO] [MOTOR] START: rpm=3200
+[00:00:05.678] [WARN] [MOTOR] CURRENT_OVER_LIMIT: phase=2, current=1520, limit=1200
+```
+
+字典中的模板语法：
+
+```json
+{
+  "text": "motor current over limit: phase={u8}, current={i16}, limit={i16}"
+}
+```
+
+类型提示（`{u8}`, `{i16}`, `{f32}`）必须与解码后的有效载荷类型标签匹配。不匹配会触发校验器警告。
+
+### 3.2 JSON 导出
+
+```json
+[
+  {
+    "timestamp": 1.234,
+    "level": "INFO",
+    "module": "MOTOR",
+    "event": "START",
+    "seq": 42,
+    "payload": {
+      "rpm": 3200
+    }
+  }
+]
+```
+
+### 3.3 胶囊报告
+
+包含以下内容的 Markdown 或 HTML 报告：
+
+- 故障摘要（时间、复位原因、故障类型）
+- 寄存器快照（pc, lr, sp, xpsr 等）
+- 故障前事件序列
+- 故障后事件序列
+- 固件哈希
+- 丢弃统计信息
+
+---
+
+## 4. 字典格式
+
+### 4.1 JSON 字典
+
+```json
+{
+  "version": "1.0",
+  "modules": {
+    "0x03": {
+      "name": "MOTOR",
+      "events": {
+        "0x01": {
+          "name": "START",
+          "level": "INFO",
+          "text": "motor started: rpm={u16}",
+          "args": [
+            { "name": "rpm", "type": "u16" }
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+### 4.2 校验规则
+
+- 二进制文件中引用的每个 `(module_id, event_id)` 必须存在于字典中，否则解码器将其标记为 `UNKNOWN_EVENT`。
+- `text` 模板类型提示必须与有效载荷的类型标签序列匹配。不匹配 = `TYPE_MISMATCH` 警告。
+- 字典中的 `level` 应与帧的 `level` 字段匹配。不匹配 = `LEVEL_MISMATCH` 警告。
+
+---
+
+## 5. 命令行接口 (CLI)
+
+```bash
+# 将二进制解码为文本
+python -m axiom_decoder trace.bin --dict dict.json --output text
+
+# 将二进制解码为 JSON
+python -m axiom_decoder trace.bin --dict dict.json --output json > trace.json
+
+# 将胶囊解码为报告
+python -m axiom_decoder capsule.bin --dict dict.json --output report --format capsule
+
+# 根据黄金帧（golden frames）校验字典
+python -m axiom_decoder --validate-dict dict.json --golden golden/
+
+# 从编码器更新黄金帧
+python tool/golden/update_golden.py --output golden/
+```
+
+---
+
+## 6. 错误处理
+
+| 错误代码 | 描述 | 解码器动作 |
+|----------|------|------------|
+| `FRAME_INVALID` | CRC 不匹配、同步头错误或版本错误 | 跳至下一个分隔符/同步点，记录警告 |
+| `UNKNOWN_EVENT` | (module_id, event_id) 不在字典中 | 输出原始 ID 和十六进制负载，继续 |
+| `TYPE_MISMATCH` | 字典模板类型 != 负载类型标签 | 输出并带有 `[!]` 警告，继续 |
+| `TRUNCATED_PAYLOAD` | payload_len > 实际可用字节 | 标记为已截断，跳过该帧 |
+| `UNKNOWN_TYPE_TAG` | 无法识别保留/用户范围内的类型标签 | 跳过该字段或标记为未知，继续 |
+
+**关键规则**：无论输入如何损坏，解码器都绝不能崩溃或进入未定义状态。
+
