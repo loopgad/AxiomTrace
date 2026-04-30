@@ -1,0 +1,29 @@
+# Build directories
+build/
+build_*/
+bin/
+obj/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.sublime-project
+*.sublime-workspace
+
+# Compiled objects
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.exe
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Project specific temporary files
+.sisyphus/
+axiomtrace_amalgamated.h

@@ -1,0 +1,42 @@
+---
+# AxiomTrace Clang-Tidy configuration
+# MISRA C:2012 core rules adapted + Clang Analyzer checks
+Checks: >
+  bugprone-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  misc-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-named-parameter,
+  -readability-identifier-length,
+  -bugprone-reserved-identifier,
+  -misc-no-recursion
+
+WarningsAsErrors: >
+  clang-analyzer-*,
+  bugprone-*,
+  portability-*
+
+CheckOptions:
+  - key:   readability-identifier-naming.StructPrefix
+    value: 'axiom_'
+  - key:   readability-identifier-naming.TypedefPrefix
+    value: 'axiom_'
+  - key:   readability-identifier-naming.FunctionPrefix
+    value: 'axiom_'
+  - key:   readability-identifier-naming.MacroPrefix
+    value: 'AXIOM_'
+  - key:   readability-identifier-naming.EnumPrefix
+    value: 'AXIOM_'
+  - key:   readability-identifier-naming.ConstantPrefix
+    value: 'AXIOM_'
+  - key:   readability-function-cognitive-complexity.Threshold
+    value: '15'
+  - key:   readability-function-cognitive-complexity.IgnoreMacros
+    value: '1'
+
+HeaderFilterRegex: '.*'
+FormatStyle: file
