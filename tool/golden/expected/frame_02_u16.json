@@ -1,0 +1,21 @@
+[
+  {
+    "sync": 165,
+    "version": [
+      1,
+      0
+    ],
+    "level": "INFO",
+    "module_id": 3,
+    "event_id": 1,
+    "seq": 1,
+    "payload_len": 3,
+    "payload": [
+      {
+        "type": "u16",
+        "value": 1000
+      }
+    ],
+    "crc": 12514
+  }
+]

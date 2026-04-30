@@ -1,0 +1,16 @@
+[
+  {
+    "sync": 165,
+    "version": [
+      1,
+      0
+    ],
+    "level": "INFO",
+    "module_id": 3,
+    "event_id": 1,
+    "seq": 0,
+    "payload_len": 0,
+    "payload": [],
+    "crc": 38548
+  }
+]

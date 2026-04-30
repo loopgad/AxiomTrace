@@ -1,0 +1,91 @@
+/* ============================================================================
+ * AxiomTrace Full Example
+ * ============================================================================
+ * Demonstrates: init, backend registration with new Backend API,
+ * filter, multiple event types, and flush pattern.
+ *
+ * Build with CMake (recommended):
+ *   cmake -B build -DAXIOM_PLATFORM=host
+ *   cmake --build build --target example_full
+ * ============================================================================ */
+
+#include "axiomtrace.h"
+#include <stdio.h>
+#include <string.h>
+
+/* Memory buffer for capturing events (host demonstration) */
+static uint8_t g_memory_buf[256];
+static uint32_t g_memory_head;
+
+/* Memory backend using new Backend API pattern */
+static int memory_write(const uint8_t *buf, uint16_t len, void *ctx) {
+    uint32_t *head = (uint32_t *)ctx;
+    if (*head + len > sizeof(g_memory_buf)) {
+        *head = 0; /* wrap */
+    }
+    memcpy(g_memory_buf + *head, buf, len);
+    *head += len;
+    return 0;
+}
+
+static int memory_ready(void *ctx) {
+    (void)ctx;
+    return 1;
+}
+
+/* Simple stdout backend for real-time output */
+static int stdout_write(const uint8_t *buf, uint16_t len, void *ctx) {
+    (void)ctx;
+    printf("[FRAME %u bytes] ", len);
+    for (uint16_t i = 0; i < len; ++i) {
+        printf("%02X ", buf[i]);
+    }
+    printf("\n");
+    return 0;
+}
+
+static int stdout_ready(void *ctx) {
+    (void)ctx;
+    return 1;
+}
+
+int main(void) {
+    axiom_init();
+
+    /* Use new Backend API: register memory backend */
+    axiom_backend_t memory_be = {
+        .name = "memory",
+        .write = memory_write,
+        .ready = memory_ready,
+        .ctx = &g_memory_head,
+    };
+    axiom_backend_register(&memory_be);
+
+    /* Use new Backend API: register stdout backend */
+    axiom_backend_t stdout_be = {
+        .name = "stdout",
+        .write = stdout_write,
+        .ready = stdout_ready,
+    };
+    axiom_backend_register(&stdout_be);
+
+    /* Normal events */
+    AX_EVT(INFO,  0x01, 0x01, (uint16_t)100);
+    AX_EVT(WARN,  0x01, 0x02, (uint32_t)0xDEADBEEF);
+    AX_EVT(ERROR, 0x02, 0x01, (int16_t)(-123), (float)3.14f);
+
+    /* Key-Value event (hashed keys) */
+    AX_KV(INFO, 0x03, 0x01, "temp", (int16_t)850, "humidity", (uint16_t)65);
+
+    /* Development log (no-op in PROD profile) */
+    AX_LOG("System initialized");
+
+    /* Probe (no-op in PROD profile) */
+    AX_PROBE("adc", (uint16_t)4095);
+
+    /* Flush to ensure all events are dispatched */
+    axiom_backend_flush_all();
+
+    printf("Full example complete.\n");
+    return 0;
+}

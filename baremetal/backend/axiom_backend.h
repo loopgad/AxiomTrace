@@ -1,0 +1,63 @@
+#ifndef AXIOM_BACKEND_H
+#define AXIOM_BACKEND_H
+
+#include <stdint.h>
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* ---------------------------------------------------------------------------
+ * Backend Capability Flags
+ * --------------------------------------------------------------------------- */
+#define AXIOM_BACKEND_CAP_MEMORY  (1u << 0)
+#define AXIOM_BACKEND_CAP_UART    (1u << 1)
+#define AXIOM_BACKEND_CAP_USB     (1u << 2)
+#define AXIOM_BACKEND_CAP_RTT     (1u << 3)
+#define AXIOM_BACKEND_CAP_SWO     (1u << 4)
+#define AXIOM_BACKEND_CAP_CANFD   (1u << 5)
+#define AXIOM_BACKEND_CAP_CAPSULE (1u << 6)
+
+/* ---------------------------------------------------------------------------
+ * Backend Contract
+ * --------------------------------------------------------------------------- */
+typedef struct {
+    const char *name;
+    uint32_t caps;
+
+    int  (*write)(const uint8_t *buf, uint16_t len, void *ctx);
+    int  (*ready)(void *ctx);
+    int  (*flush)(void *ctx);
+    int  (*panic_write)(const uint8_t *buf, uint16_t len, void *ctx);
+
+    void (*on_drop)(uint32_t lost, void *ctx);
+    void *ctx;
+} axiom_backend_t;
+
+/* ---------------------------------------------------------------------------
+ * Backend Registry
+ * --------------------------------------------------------------------------- */
+
+#ifndef AXIOM_BACKEND_MAX
+#define AXIOM_BACKEND_MAX 4
+#endif
+
+/* Register a backend. Returns 0 on success, negative on error. */
+int axiom_backend_register(const axiom_backend_t *backend);
+
+/* Dispatch a frame to all registered backends.
+ * Called internally by axiom_write() after ring buffer insertion. */
+void axiom_backend_dispatch(const uint8_t *frame, uint16_t len);
+
+/* Flush all backends that provide a flush callback. */
+void axiom_backend_flush_all(void);
+
+/* Panic write to all backends that provide panic_write. */
+void axiom_backend_panic_write(const uint8_t *frame, uint16_t len);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* AXIOM_BACKEND_H */
