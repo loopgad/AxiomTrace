@@ -114,8 +114,8 @@ The following behaviors are **strictly prohibited** in `axiom_write()` and all I
 | Progressive Complexity | Layer 0 (Hardcoded ID) → Layer 1 (X-Macro) → Layer 2 (YAML + codegen). Users upgrade as needed without forced complexity. |
 | Clear Error Messages | Compile-time errors must use `#error "AxiomTrace: xxx"` with clear English prompts. Runtime errors (e.g., ring full) exposed via `on_drop` callback; no silent failures. |
 | Full Example Coverage | Every Frontend API, Backend Template, and Profile must have an independent, compilable example. |
-| Synchronized Documentation | Any API change must update `spec/api_reference.md`. Any protocol change must update `spec/wire_format.md` and the decoder. |
-| Automated Single-file Library | Provide `tool/scripts/amalgamate.py` to merge the library into `axiomtrace.h`. Amalgamated output must pass all host tests. |
+| Synchronized Documentation | Any API change must update `../../spec/api_reference.md`. Any protocol change must update `../../spec/wire_format.md` and the decoder. |
+| Automated Single-file Library | Provide `../../tool/scripts/amalgamate.py` to merge the library into `axiomtrace.h`. Amalgamated output must pass all host tests. |
 
 ---
 
@@ -159,16 +159,16 @@ Merge
 
 - **Iteration Start**: Check `ROUTE.md` goals, ensure no scope creep.
 - **Each Commit**: Run `ctest` (host tests) locally before pushing.
-- **Protocol Tweaks**: Run `tool/golden/update_golden.py` and commit new golden frames.
+- **Protocol Tweaks**: Run `../../tool/golden/update_golden.py` and commit new golden frames.
 - **Weekly**: Check `tests/` coverage; add tests for any uncovered new code.
 
 ### 9.2 Release Workflow
 
 1. Confirm all `ROUTE.md` tasks for the stage are complete.
-2. Run full tests: `ctest --output-on-failure` + `python tool/tests/test_decoder.py`.
-3. Run benchmark: `tool/benchmark/host_benchmark` and update the report.
+2. Run full tests: `ctest --output-on-failure` + `python ../../tool/tests/test_decoder.py`.
+3. Run benchmark: `../../tool/benchmark/host_benchmark` and update the report.
 4. Check for no P0/P1 issues (see §10).
-5. Update `CHANGELOG.md`.
+5. Update `../changelog/CHANGELOG.md`.
 6. Update `PLAN.md` status.
 7. Tag git: `git tag v0.x-stage`.
 8. Run amalgamation script and verify the single-file library passes tests.

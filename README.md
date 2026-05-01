@@ -81,13 +81,16 @@ axiom-decoder trace.bin -d events.yaml -o text
 
 ## 📚 Documentation Index
 
-| Specification | Description |
+| Document | Description |
 | :--- | :--- |
+| [Directory Structure](docs/reference/DIR_STRUCTURE.md) | Complete file tree with plane annotations |
 | [API Reference](spec/api_reference.md) | Frontend macros and Core control APIs |
 | [Wire Format](spec/wire_format.md) | Binary serialization and framing (COBS) |
-| [Event Model](spec/event_model.md) | Header layout and D2R mechanics |
+| [Event Model](spec/event_model.md) | Header layout, timestamp, and D2R mechanics |
 | [Dictionary Spec](spec/event_dictionary.md) | YAML schema and Enum mapping |
-| [Rules & Policy](RULES.md) | Engineering standards and hot-path mandates |
+| [Rules & Policy](docs/project/RULES.md) | Engineering standards and hot-path mandates |
+| [Fault Capsule](spec/fault_capsule.md) | Fault freeze, commit, and non-volatile storage |
+| [Porting Guide](docs/reference/porting_guide.md) | How to port AxiomTrace to new MCU platforms |
 
 ---
 

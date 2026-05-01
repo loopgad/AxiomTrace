@@ -15,11 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed and restructured `baremetal/` directory to align with v1.0 planes.
 
 ### Added
-- `RULES.md`: Enforced development rules including hot-path prohibitions (no malloc, no printf, no Flash erase), drop-summary requirements, and mandatory issue→design→spec→golden→impl→decoder→tests→benchmark→docs→changelog workflow.
-- `PLAN.md` v1.0: Frozen target architecture, release gates, and design philosophy.
-- `ROUTE.md` v1.0: Development stages from v0.1-core through v0.9-rc to v1.0-stable.
-- `spec/api_reference.md`: Frontend API reference for `AX_LOG`, `AX_EVT`, `AX_PROBE`, `AX_FAULT`, `AX_KV`.
-- `spec/decoder_protocol.md`: Decoder input/output protocol and dictionary format specification.
+- `../project/RULES.md`: Enforced development rules including hot-path prohibitions (no malloc, no printf, no Flash erase), drop-summary requirements, and mandatory issue→design→spec→golden→impl→decoder→tests→benchmark→docs→changelog workflow.
+- `../project/PLAN.md` v1.0: Frozen target architecture, release gates, and design philosophy.
+- `../project/ROUTE.md` v1.0: Development stages from v0.1-core through v0.9-rc to v1.0-stable.
+- `../../spec/api_reference.md`: Frontend API reference for `AX_LOG`, `AX_EVT`, `AX_PROBE`, `AX_FAULT`, `AX_KV`.
+- `../../spec/decoder_protocol.md`: Decoder input/output protocol and dictionary format specification.
 
 ### Removed
 - v2.0 `axiom_storage_t` unified storage abstraction (replaced by Backend Contract).
@@ -40,4 +40,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fault Capsule: Pre-window freeze, post-window capture, register snapshot, firmware hash, capsule CRC, flash commit.
 - Tool Plane: Python decoder, text renderer, JSON exporter, capsule reporter, golden frame manager, benchmark tool.
 - Host unit tests and Python regression tests.
-- Single-file library generator (`tool/scripts/amalgamate.py`).
+- Single-file library generator (`../../tool/scripts/amalgamate.py`).

@@ -33,13 +33,7 @@ void axiom_flush(void) {
         /* Frame structure: Header(8B) + Timestamp(1-5B) + PayloadLen(1B) + Payload(N) + CRC(2B) */
         if (n < 12) break; /* Minimum: 8 + 1 + 1 + 0 + 2 = 12 */
         /* Decode variable-length timestamp to find payload_len offset */
-        uint8_t ts_len = 1;
-        uint8_t fb0 = frame[8];
-        if (fb0 >= 0xC0) {
-            ts_len = (fb0 == 0xFFu) ? 5 : 3;
-        } else if (fb0 >= 0x80) {
-            ts_len = 2;
-        }
+        uint8_t ts_len = axiom_timestamp_decode_len(frame[8]);
         /* Determine actual frame length */
         uint16_t payload_len = frame[8 + ts_len];
         uint16_t frame_len = (uint16_t)(8u + ts_len + 1u + payload_len + 2u);
@@ -119,7 +113,7 @@ void axiom_write(axiom_level_t level, uint8_t module_id, uint16_t event_id,
     /* Emit DROP_SUMMARY if drops occurred */
     if (axiom_filter_drop_summary_ready(&s_filter)) {
         uint32_t lost = axiom_filter_drop_count_get_and_clear(&s_filter);
-        uint8_t summary[8];
+        uint8_t summary[10];
         uint8_t sp = 0;
         summary[sp++] = AXIOM_TYPE_U32;
         summary[sp++] = (uint8_t)(lost & 0xFFu);

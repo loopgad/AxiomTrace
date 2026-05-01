@@ -50,11 +50,11 @@ AxiomTrace/
 - `PLAN.md`
 - `ROUTE.md`
 - `RULES.md`
-- `spec/event_model.md`
-- `spec/wire_format.md`
-- `spec/backend_contract.md`
-- `spec/fault_capsule.md`
-- `spec/api_reference.md`
+- `../../spec/event_model.md`
+- `../../spec/wire_format.md`
+- `../../spec/backend_contract.md`
+- `../../spec/fault_capsule.md`
+- `../../spec/api_reference.md`
 
 **验收**：
 - 所有功能都能归入 `LOG / EVT / PROBE / FAULT / BACKEND / TOOL`。
@@ -220,7 +220,7 @@ typedef struct {
 
 **必须完成**：
 - API review（命名、参数、宏行为一致性）。
-- spec review（所有 `spec/*.md` 与代码一致）。
+- spec review（所有 `../../spec/*.md` 与代码一致）。
 - backend review（全部 template 编译通过）。
 - capsule review（freeze/commit/dump 全路径测试）。
 - benchmark report（热路径周期数锁定）。

@@ -68,14 +68,14 @@ For UART and USB CDC, the entire Frame Body is **COBS-encoded** to eliminate `0x
 - The final `0x00` delimiter guarantees resynchronization after frame loss.
 - **Blind Overwrite Compatibility**: Even if a frame is partially overwritten in a ring buffer, the next frame starting after a `0x00` delimiter can be reliably located.
 
-**Note**: COBS is applied to the **entire Frame Body** (Header + Payload Length + Payload + CRC). The delimiter is **not** part of the COBS block.
+**Note**: COBS is applied to the **entire Frame Body** (Header + Timestamp + Payload Length + Payload + CRC). The delimiter is **not** part of the COBS block.
 
 ---
 
 ## 4. CRC-16
 
 - **Algorithm**: CRC-16/CCITT-FALSE (`poly = 0x1021`, `init = 0xFFFF`, no reflection, final XOR `0x0000`).
-- **Coverage**: Header (8B) + Payload Length (1B) + Payload (N bytes).
+- **Coverage**: Header (8B) + Timestamp (1..5B) + Payload Length (1B) + Payload (N bytes).
 - **Computation**: Precomputed 256-byte ROM lookup table for O(n) speed.
 - **Verification**: Decoder recomputes CRC over the same range and compares with the trailing 2 bytes. Mismatch = `FRAME_INVALID`.
 - **Error Recovery**: In "Blind Overwrite" scenarios, CRC failure allows the host to detect partially overwritten frames and safely discard them without losing synchronization for subsequent frames.
@@ -96,7 +96,7 @@ For UART and USB CDC, the entire Frame Body is **COBS-encoded** to eliminate `0x
 **Rules**:
 
 - Backends must not define private protocols. They only apply transport-specific wrappers.
-- The Frame Body (Header + Payload Length + Payload + CRC) is identical across all transports.
+- The Frame Body (Header + Timestamp + Payload Length + Payload + CRC) is identical across all transports.
 - SWO/ITM omits CRC because the transport is assumed lossless within the debug probe channel.
 
 ---
@@ -112,7 +112,7 @@ A frame is valid if and only if:
 3. `level` upper nibble is `0`
 4. Timestamp is decodable (first byte after header identifies length 1/2/3/5)
 5. `payload_len` matches actual payload bytes read before CRC
-6. CRC-16 recomputed over Header + Timestamp + Payload Length + Payload matches trailing 2 bytes
+6. CRC-16 recomputed over Header + Timestamp + Payload Length + Payload matches the trailing 2 bytes
 
 ### 6.2 Invalid Frame Handling
 

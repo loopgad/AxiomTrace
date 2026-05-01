@@ -20,8 +20,20 @@ typedef struct {
 /* Initialize timestamp context */
 void axiom_timestamp_init(axiom_timestamp_ctx_t *ctx);
 
-/* Encode current timestamp into up to 4 bytes. Returns encoded length (1..4). */
+/* Encode current timestamp into up to 5 bytes. Returns encoded length (1..5). */
 uint8_t axiom_timestamp_encode(axiom_timestamp_ctx_t *ctx, uint8_t *out);
+
+/* Decode timestamp length from the first byte after the frame header.
+ * Returns 1, 2, 3, or 5. Call this on frame[8] to locate payload_len.
+ */
+static inline uint8_t axiom_timestamp_decode_len(uint8_t first_byte) {
+    if (first_byte >= 0xC0) {
+        return (first_byte == 0xFFu) ? 5 : 3;
+    } else if (first_byte >= 0x80) {
+        return 2;
+    }
+    return 1;
+}
 
 #ifdef __cplusplus
 }

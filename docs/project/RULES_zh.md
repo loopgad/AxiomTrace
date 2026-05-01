@@ -114,8 +114,8 @@ AxiomTrace 是一个 **MCU 裸机可观测微内核**。我们的坚定目标：
 | 渐进式复杂度 | Layer 0（硬编码 ID）→ Layer 1（X-Macro 定义）→ Layer 2（YAML + codegen）；用户按需升级，不被迫接受复杂工具链。 |
 | 错误信息明确 | 编译期配置错误必须通过 `#error "AxiomTrace: xxx"` 给出清晰英文提示；运行时错误（如 ring 满）通过 `on_drop` callback 暴露，禁止静默失败。 |
 | 示例全覆盖 | 每个 Frontend API、每个 Backend Template、每个 Profile 必须有独立可编译的 example。 |
-| 文档同步 | 任何 API 变更必须同步更新 `spec/api_reference.md`；任何协议变更必须同步更新 `spec/wire_format.md` 和 decoder。 |
-| 单文件库自动化 | 提供 `tool/scripts/amalgamate.py`，一键将多文件库合并为单文件 `axiomtrace.h`；合并产物必须通过全部 host tests。 |
+| 文档同步 | 任何 API 变更必须同步更新 `../../spec/api_reference.md`；任何协议变更必须同步更新 `../../spec/wire_format.md` 和 decoder。 |
+| 单文件库自动化 | 提供 `../../tool/scripts/amalgamate.py`，一键将多文件库合并为单文件 `axiomtrace.h`；合并产物必须通过全部 host tests。 |
 
 ---
 
@@ -159,16 +159,16 @@ PR 评审（至少 1 人评审，检查是否违反 RULES.md）
 
 - **每轮迭代开始**：检查 `ROUTE.md` 当前阶段目标，确认无范围蔓延。
 - **每次 commit**：本地运行 `ctest` (host tests) 通过后再 push。
-- **每次协议微调**：运行 `tool/golden/update_golden.py` 并提交新的 golden frames。
+- **每次协议微调**：运行 `../../tool/golden/update_golden.py` 并提交新的 golden frames。
 - **每周**：检查 `tests/` 覆盖率，未覆盖的新增代码必须补测试。
 
 ### 9.2 版本发布流程
 
 1. 从 `ROUTE.md` 确认当前阶段所有任务已完成。
-2. 运行全量测试：`ctest --output-on-failure` + `python tool/tests/test_decoder.py`。
-3. 运行 benchmark：`tool/benchmark/host_benchmark` 并更新报告。
+2. 运行全量测试：`ctest --output-on-failure` + `python ../../tool/tests/test_decoder.py`。
+3. 运行 benchmark：`../../tool/benchmark/host_benchmark` 并更新报告。
 4. 检查无 P0/P1 问题（见 §10）。
-5. 更新 `CHANGELOG.md`。
+5. 更新 `../changelog/CHANGELOG.md`。
 6. 更新 `PLAN.md` 状态。
 7. 打 git tag：`git tag v0.x-stage`。
 8. 运行 amalgamate 脚本生成单文件库，验证通过测试。

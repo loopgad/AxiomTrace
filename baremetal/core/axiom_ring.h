@@ -5,6 +5,18 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#ifndef AXIOM_RING_BUFFER_POLICY_DROP
+#define AXIOM_RING_BUFFER_POLICY_DROP 0
+#endif
+
+#ifndef AXIOM_RING_BUFFER_POLICY_OVERWRITE
+#define AXIOM_RING_BUFFER_POLICY_OVERWRITE 1
+#endif
+
+#ifndef AXIOM_RING_BUFFER_POLICY
+#define AXIOM_RING_BUFFER_POLICY AXIOM_RING_BUFFER_POLICY_DROP
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

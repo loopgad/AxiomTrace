@@ -15,11 +15,11 @@
 - 重命名并重组了 `baremetal/` 目录，以匹配 v1.0 平面架构。
 
 ### 新增
-- `RULES.md`：强制执行开发规则，包括热路径禁令（无 malloc、无 printf、无 Flash 擦除）、丢弃摘要要求，以及强制性的 issue→design→spec→golden→impl→decoder→tests→benchmark→docs→changelog 工作流。
-- `PLAN.md` v1.0：冻结目标架构、发布门槛和设计哲学。
-- `ROUTE.md` v1.0：从 v0.1-core 到 v0.9-rc 再到 v1.0-stable 的开发阶段。
-- `spec/api_reference.md`：`AX_LOG`、`AX_EVT`、`AX_PROBE`、`AX_FAULT`、`AX_KV` 的前端 API 参考。
-- `spec/decoder_protocol.md`：解码器输入/输出协议和字典格式规范。
+- `../project/RULES.md`：强制执行开发规则，包括热路径禁令（无 malloc、无 printf、无 Flash 擦除）、丢弃摘要要求，以及强制性的 issue→design→spec→golden→impl→decoder→tests→benchmark→docs→changelog 工作流。
+- `../project/PLAN.md` v1.0：冻结目标架构、发布门槛和设计哲学。
+- `../project/ROUTE.md` v1.0：从 v0.1-core 到 v0.9-rc 再到 v1.0-stable 的开发阶段。
+- `../../spec/api_reference.md`：`AX_LOG`、`AX_EVT`、`AX_PROBE`、`AX_FAULT`、`AX_KV` 的前端 API 参考。
+- `../../spec/decoder_protocol.md`：解码器输入/输出协议和字典格式规范。
 
 ### 移除
 - v2.0 `axiom_storage_t` 统一存储抽象（由 Backend Contract 替代）。
@@ -40,4 +40,4 @@
 - Fault Capsule：故障前窗口冻结、故障后窗口捕获、寄存器快照、固件哈希、Capsule CRC、Flash commit。
 - 工具层：Python 解码器、文本渲染器、JSON 导出器、故障报告器、Golden 帧管理器、基准测试工具。
 - 主机单元测试和 Python 回归测试。
-- 单文件库生成器 (`tool/scripts/amalgamate.py`)。
+- 单文件库生成器 (`../../tool/scripts/amalgamate.py`)。

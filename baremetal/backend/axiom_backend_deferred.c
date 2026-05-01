@@ -1,4 +1,5 @@
 #include "axiom_backend_deferred.h"
+#include "axiom_timestamp.h"
 #include "axiom_port.h"
 #include <string.h>
 
@@ -61,22 +62,19 @@ static int deferred_flush(void *ctx) {
         uint16_t avail = axiom_ring_peek(ring, frame_buf, sizeof(frame_buf));
         if (avail < 12) break; /* minimum: 8 header + 1 ts + 1 len + 0 payload + 2 crc */
         /* Decode variable-length timestamp to locate payload_len */
-        uint8_t ts_len = 1;
-        uint8_t fb0 = frame_buf[8];
-        if (fb0 >= 0xC0) {
-            ts_len = (fb0 == 0xFFu) ? 5 : 3;
-        } else if (fb0 >= 0x80) {
-            ts_len = 2;
-        }
+        uint8_t ts_len = axiom_timestamp_decode_len(frame_buf[8]);
         uint16_t payload_len = frame_buf[8 + ts_len];
         uint16_t frame_len = (uint16_t)(8u + ts_len + 1u + payload_len + 2u);
         if (avail < frame_len) break;
-        /* Read exact frame and forward */
-        uint16_t n = axiom_ring_read(ring, frame_buf, frame_len);
-        if (n == 0) break;
+        /* Forward BEFORE consuming from ring, so a failed write does not lose data */
         if (downstream->write) {
-            (void)downstream->write(frame_buf, n, downstream->ctx);
+            int rc = downstream->write(frame_buf, frame_len, downstream->ctx);
+            if (rc < 0) {
+                break; /* downstream busy or error — stop and retry next flush */
+            }
         }
+        /* Only consume after successful write */
+        (void)axiom_ring_read(ring, frame_buf, frame_len);
         dispatched++;
     }
     return dispatched;

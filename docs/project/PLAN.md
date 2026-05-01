@@ -50,11 +50,11 @@ AxiomTrace/
 - `PLAN.md`
 - `ROUTE.md`
 - `RULES.md`
-- `spec/event_model.md`
-- `spec/wire_format.md`
-- `spec/backend_contract.md`
-- `spec/fault_capsule.md`
-- `spec/api_reference.md`
+- `../../spec/event_model.md`
+- `../../spec/wire_format.md`
+- `../../spec/backend_contract.md`
+- `../../spec/fault_capsule.md`
+- `../../spec/api_reference.md`
 
 **Acceptance**:
 - All features fit into `LOG / EVT / PROBE / FAULT / BACKEND / TOOL`.
@@ -220,7 +220,7 @@ typedef struct {
 
 **Must Complete**:
 - API review (naming, parameters, macro behavior consistency).
-- Spec review (all `spec/*.md` consistent with code).
+- Spec review (all `../../spec/*.md` consistent with code).
 - Backend review (all templates compile).
 - Capsule review (freeze/commit/dump full path test).
 - Benchmark report (hot path cycle counts locked).

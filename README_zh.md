@@ -83,11 +83,14 @@ axiom-decoder trace.bin -d events.yaml -o text
 
 | 规范文档 | 描述 |
 | :--- | :--- |
+| [目录结构](docs/reference/DIR_STRUCTURE.md) | 完整文件树与各平面标注 |
 | [API 参考手册](spec/api_reference.md) | 前端宏与核心控制 API |
 | [有线格式规范](spec/wire_format.md) | 二进制序列化与成帧 (COBS) |
-| [事件模型规范](spec/event_model.md) | 报头布局与 D2R 机制 |
+| [事件模型规范](spec/event_model.md) | 报头布局、时间戳与 D2R 机制 |
 | [字典规范](spec/event_dictionary.md) | YAML Schema 与枚举映射 |
-| [工程规则与准则](RULES.md) | 工程标准与热路径铁律 |
+| [工程规则与准则](docs/project/RULES.md) | 工程标准与热路径铁律 |
+| [故障胶囊规范](spec/fault_capsule.md) | 故障冻结、提交与非易失性存储 |
+| [移植指南](docs/reference/porting_guide.md) | 如何将 AxiomTrace 移植到新 MCU 平台 |
 
 ---
 

@@ -12,11 +12,11 @@
 
 - [x] Repository directory structure reorganized into five planes.
 - [x] `PLAN.md` / `ROUTE.md` / `RULES.md` finalized.
-- [ ] `spec/event_model.md` finalized (Event Record semantics, Payload self-description).
-- [ ] `spec/wire_format.md` finalized (v1.0 frame structure).
-- [ ] `spec/backend_contract.md` finalized (`axiom_backend_t` interface).
-- [ ] `spec/fault_capsule.md` finalized (capsule format and lifecycle).
-- [ ] `spec/api_reference.md` initial draft (Frontend macro APIs).
+- [ ] `../../spec/event_model.md` finalized (Event Record semantics, Payload self-description).
+- [ ] `../../spec/wire_format.md` finalized (v1.0 frame structure).
+- [ ] `../../spec/backend_contract.md` finalized (`axiom_backend_t` interface).
+- [ ] `../../spec/fault_capsule.md` finalized (capsule format and lifecycle).
+- [ ] `../../spec/api_reference.md` initial draft (Frontend macro APIs).
 - [ ] Lock-free ISR-safe RAM Ring `axiom_ring.c`.
 - [ ] Event Record assembly `axiom_event.c` (header + payload_len + payload + crc).
 - [ ] Binary encoder `axiom_encode.c` (`_Generic` type dispatch + type tags).
@@ -41,11 +41,11 @@
 - [ ] Frozen binary frame field order and size.
 - [ ] Generate first batch of golden frames (covering all type tags, boundary payloads).
 - [ ] Write `expected.json` (expected output for decoder).
-- [ ] Python decoder `tool/decoder/axiom_decoder.py` (parsing header/payload/crc).
+- [ ] Python decoder `../../tool/decoder/axiom_decoder.py` (parsing header/payload/crc).
 - [ ] Decoder explicitly rejects invalid frames (returns `FRAME_INVALID`, no crash).
-- [ ] `tool/golden/update_golden.py` (encoder generates bin + expected.json).
+- [ ] `../../tool/golden/update_golden.py` (encoder generates bin + expected.json).
 - [ ] Host regression test: `test_decoder.py` full comparison against golden frames.
-- [ ] Documentation update: `spec/wire_format.md` marked as **FROZEN**.
+- [ ] Documentation update: `../../spec/wire_format.md` marked as **FROZEN**.
 
 **Acceptance Criteria**:
 - `encoder -> frame -> decoder -> expected.json` 100% match.
@@ -147,9 +147,9 @@
 - [ ] JSON export: full event stream exported as JSON array.
 - [ ] Capsule report: HTML/Markdown fault analysis report.
 - [ ] Dictionary validator: verify payload types match dictionary templates.
-- [ ] `tool/scripts/amalgamate.py`: merges core+frontend+port into single-file `axiomtrace.h`.
-- [ ] `tool/scripts/extract_dict.py`: extracts `dictionary.json` from C source/X-Macros.
-- [ ] Benchmark tool: `tool/benchmark/host_benchmark.c` measures encode/CRC/ring write cycles.
+- [ ] `../../tool/scripts/amalgamate.py`: merges core+frontend+port into single-file `axiomtrace.h`.
+- [ ] `../../tool/scripts/extract_dict.py`: extracts `dictionary.json` from C source/X-Macros.
+- [ ] Benchmark tool: `../../tool/benchmark/host_benchmark.c` measures encode/CRC/ring write cycles.
 - [ ] Golden regression: CI auto-runs `update_golden.py` + `test_decoder.py`.
 
 **Acceptance Criteria**:
@@ -168,7 +168,7 @@
 - [ ] RISC-V port refinement (mtime / CLINT / Interrupt control / Flash hook).
 - [ ] Generic port (host simulation) refinement as the default CI environment.
 - [ ] Integration validation in at least 2 real MCU projects (different vendors).
-- [ ] Integration docs: `docs/porting_guide.md`.
+- [ ] Integration docs: `../reference/porting_guide.md`.
 - [ ] Cross-compiler validation: GCC, Clang, IAR (optional).
 
 **Acceptance Criteria**:
@@ -182,10 +182,10 @@
 **Goal**: No new features, only bug fixing.
 
 - [ ] API review (naming consistency, macro behavior consistency, doc/code alignment).
-- [ ] Spec review (all `spec/*.md` checked against implementation).
+- [ ] Spec review (all `../../spec/*.md` checked against implementation).
 - [ ] Backend review (all templates compile with mock drivers).
 - [ ] Capsule review (freeze / commit / dump full path test passed).
-- [ ] Benchmark report finalized (cycles locked, recorded in `docs/benchmark.md`).
+- [ ] Benchmark report finalized (cycles locked, recorded in `../reference/benchmark.md`).
 - [ ] Fuzz malformed frame (custom fuzz target: random tampering, decoder no-crash).
 - [ ] Fault injection (simulate HardFault, verify capsule capture integrity).
 - [ ] Power-loss simulation (Flash erase/write power-loss, capsule recovery).

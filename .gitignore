@@ -1,29 +1,35 @@
-# Build directories
+# ============================================================
+# AxiomTrace .gitignore
+# ============================================================
+
+# --- Build output ---
 build/
 build_*/
 bin/
 obj/
 
-# IDE and Editor files
+# --- Python artifacts ---
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+*.egg
+
+# --- IDE and editor ---
 .vscode/
 .idea/
 *.swp
 *.sublime-project
 *.sublime-workspace
+*.code-workspace
 
-# Compiled objects
-*.o
-*.obj
-*.a
-*.lib
-*.so
-*.dll
-*.exe
-
-# OS generated files
+# --- OS ---
 .DS_Store
 Thumbs.db
 
-# Project specific temporary files
+# --- AI / development tools ---
 .sisyphus/
+
+# --- Project specific generated files ---
 axiomtrace_amalgamated.h

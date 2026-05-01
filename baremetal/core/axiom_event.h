@@ -66,7 +66,8 @@ AXIOM_CHECK_ALIGN(axiom_event_header_t, 1);
 #define AXIOM_MAX_PAYLOAD_LEN 64u
 #endif
 
-#define AXIOM_MAX_FRAME_LEN (8u + 1u + AXIOM_MAX_PAYLOAD_LEN + 2u)
+/* Max timestamp length is 5 bytes (0xFF + 4-byte full delta) */
+#define AXIOM_MAX_FRAME_LEN (8u + 5u + 1u + AXIOM_MAX_PAYLOAD_LEN + 2u)
 
 #ifdef __cplusplus
 }

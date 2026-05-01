@@ -12,11 +12,11 @@
 
 - [x] 仓库目录结构按五平面重组。
 - [x] `PLAN.md` / `ROUTE.md` / `RULES.md` 定稿。
-- [ ] `spec/event_model.md` 定稿（Event Record 语义、Payload 自描述）。
-- [ ] `spec/wire_format.md` 定稿（v1.0 frame 结构）。
-- [ ] `spec/backend_contract.md` 定稿（`axiom_backend_t` 接口）。
-- [ ] `spec/fault_capsule.md` 定稿（capsule 格式与生命周期）。
-- [ ] `spec/api_reference.md` 初稿（Frontend 宏 API）。
+- [ ] `../../spec/event_model.md` 定稿（Event Record 语义、Payload 自描述）。
+- [ ] `../../spec/wire_format.md` 定稿（v1.0 frame 结构）。
+- [ ] `../../spec/backend_contract.md` 定稿（`axiom_backend_t` 接口）。
+- [ ] `../../spec/fault_capsule.md` 定稿（capsule 格式与生命周期）。
+- [ ] `../../spec/api_reference.md` 初稿（Frontend 宏 API）。
 - [ ] 无锁 ISR-safe RAM Ring `axiom_ring.c`。
 - [ ] Event Record 组装 `axiom_event.c`（header + payload_len + payload + crc）。
 - [ ] 二进制编码器 `axiom_encode.c`（`_Generic` 类型分发 + 类型标签）。
@@ -41,11 +41,11 @@
 - [ ] 冻结 binary frame 字段顺序与大小。
 - [ ] 生成首批 golden frames（覆盖全部 type tag、边界 payload）。
 - [ ] 编写 `expected.json`（decoder 期望输出）。
-- [ ] Python decoder `tool/decoder/axiom_decoder.py`（解析 header/payload/crc）。
+- [ ] Python decoder `../../tool/decoder/axiom_decoder.py`（解析 header/payload/crc）。
 - [ ] decoder 非法帧显式拒绝（返回 `FRAME_INVALID`，不崩溃）。
-- [ ] `tool/golden/update_golden.py`（encoder 生成 bin + expected.json）。
+- [ ] `../../tool/golden/update_golden.py`（encoder 生成 bin + expected.json）。
 - [ ] Host regression test：`test_decoder.py` 对 golden frames 全量比对。
-- [ ] 文档更新：`spec/wire_format.md` 标记为 **FROZEN**。
+- [ ] 文档更新：`../../spec/wire_format.md` 标记为 **FROZEN**。
 
 **验收标准**：
 - `encoder -> frame -> decoder -> expected.json` 100% 一致。
@@ -147,9 +147,9 @@
 - [ ] json export：完整事件流导出为 JSON array。
 - [ ] capsule report：HTML/Markdown 格式故障分析报告。
 - [ ] dictionary validator：校验 payload 类型与 dictionary 模板匹配。
-- [ ] `tool/scripts/amalgamate.py`：将 core+frontend+port 合并为单文件 `axiomtrace.h`。
-- [ ] `tool/scripts/extract_dict.py`：从 C 源码/X-Macro 提取 `dictionary.json`。
-- [ ] benchmark 工具：`tool/benchmark/host_benchmark.c` 测量编码/CRC/ring write 周期。
+- [ ] `../../tool/scripts/amalgamate.py`：将 core+frontend+port 合并为单文件 `axiomtrace.h`。
+- [ ] `../../tool/scripts/extract_dict.py`：从 C 源码/X-Macro 提取 `dictionary.json`。
+- [ ] benchmark 工具：`../../tool/benchmark/host_benchmark.c` 测量编码/CRC/ring write 周期。
 - [ ] golden 回归：CI 自动运行 `update_golden.py` + `test_decoder.py`。
 
 **验收标准**：
@@ -168,7 +168,7 @@
 - [ ] RISC-V port 完善（mtime / CLINT / 中断控制 / Flash hook）。
 - [ ] Generic port（主机模拟）完善，作为 CI 默认运行环境。
 - [ ] 在至少 2 个真实 MCU 项目（不同厂商）中集成验证。
-- [ ] 集成文档：`docs/porting_guide.md`。
+- [ ] 集成文档：`../reference/porting_guide.md`。
 - [ ] 跨编译器验证：GCC、Clang、IAR（可选）。
 
 **验收标准**：
@@ -182,10 +182,10 @@
 **目标**：不再加功能，只清问题。
 
 - [ ] API review（命名一致性、宏行为一致性、文档与代码一致）。
-- [ ] spec review（所有 spec/*.md 与代码实现逐条核对）。
+- [ ] spec review（所有 ../../spec/*.md 与代码实现逐条核对）。
 - [ ] backend review（全部 template 用 mock 驱动编译通过）。
 - [ ] capsule review（freeze / commit / dump 全路径测试通过）。
-- [ ] benchmark report 定稿（热路径周期数锁定，记录于 `docs/benchmark.md`）。
+- [ ] benchmark report 定稿（热路径周期数锁定，记录于 `../reference/benchmark.md`）。
 - [ ] fuzz malformed frame（自定义 fuzz 目标：随机篡改 frame 各字段，decoder 不崩溃）。
 - [ ] fault injection（模拟 HardFault，验证 capsule 捕获完整性）。
 - [ ] power-loss simulation（Flash 擦除/写入中途断电，重启后 capsule 可恢复）。

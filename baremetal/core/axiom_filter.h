@@ -22,11 +22,6 @@ typedef struct {
     bool     drop_pending;      /* True if drops occurred since last summary */
 } axiom_filter_t;
 
-/* Global filter instance — defined in axiom_event.c.
- * Declared here so axiom_filter.c can access it for runtime control APIs.
- */
-extern axiom_filter_t s_filter;
-
 /* Initialize filter (all levels/modules enabled, counters zeroed) */
 void axiom_filter_init(axiom_filter_t *filter);
 
