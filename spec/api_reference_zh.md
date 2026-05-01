@@ -60,6 +60,7 @@ AX_EVT(ERROR, COM, TIMEOUT, (uint8_t)bus_id, (uint32_t)ms);
 - 主要的生产级 API。无论何种 Profile，始终会被编译。
 - `MOTOR`, `START` 是模块/事件名称，通过 X-Macro 或代码生成解析为 `module_id` / `event_id`。
 - 参数通过 `_Generic` 保证类型安全；类型不匹配会导致编译错误。
+- **Direct-to-Ring (D2R)**：编码直接在环形缓冲区中进行，确保零拷贝和极小的栈开销。
 - 二进制帧仅包含 ID 和类型化有效载荷 —— 无字符串。
 
 **要求**：

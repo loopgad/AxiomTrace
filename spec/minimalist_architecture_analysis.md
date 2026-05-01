@@ -164,22 +164,17 @@ static void _ring_put(const uint8_t *data, uint8_t len) {
 
 void axiom_write(axiom_level_t lvl, uint8_t mod, uint16_t evt,
                  const uint8_t *payload, uint8_t len) {
-    uint8_t buf[AXIOM_RING_SIZE]; /* Temporary frame on stack */
-    uint8_t p = 0;
-    buf[p++] = 0xA5;
-    buf[p++] = 0x10; /* v1.0 */
-    buf[p++] = (uint8_t)lvl;
-    buf[p++] = mod;
-    buf[p++] = evt & 0xFF;
-    buf[p++] = evt >> 8;
-    uint16_t seq = _seq++;
-    buf[p++] = seq & 0xFF;
-    buf[p++] = seq >> 8;
-    buf[p++] = len;
-    for (uint8_t i = 0; i < len; i++) buf[p++] = payload[i];
-    /* CRC-16 placeholder */
-    buf[p++] = 0; buf[p++] = 0;
-    _ring_put(buf, p);
+    /* Direct-to-Ring (D2R) Implementation */
+    axiom_critical_enter();
+    uint16_t total_len = 8 + 1 + len + 2; /* Header + Len + Payload + CRC (ignoring variable TS for brevity) */
+    if (_ring_has_space(total_len)) {
+        uint16_t pos = _ring_acquire(total_len);
+        _ring_put_byte_at(pos++, 0xA5);
+        _ring_put_byte_at(pos++, 0x10);
+        /* ... write other fields directly and compute incremental CRC ... */
+        _ring_commit(total_len);
+    }
+    axiom_critical_exit();
 }
 
 /* Backend Dispatch: Simplest polling implementation */
@@ -318,7 +313,7 @@ int main(void) {
 | Solution | File Count | Composition | Use Case |
 |----------|------------|-------------|----------|
 | **Extreme Minimalism** | 2 | `axiom.h` + `axiom.c` | Rapid validation, teaching, small projects. |
-| **Recommended Default** | 3 | `axiom.h` + `axiom.c` + `axiom_events.h` | Production projects needing module/event management. |
+| **Recommended Default** | 3 | `axiom.h` + `axiom.c` + `axiom_events.h` (+ D2R) | Production projects needing module/event management. |
 | **Current Design** | 14+ | 7 .h + 7 .c + various backends | Over-split, should be deferred to v0.5+. |
 
 **3-File Solution Content Allocation**:

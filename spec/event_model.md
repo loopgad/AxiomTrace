@@ -79,21 +79,28 @@ Payload is a concatenation of typed fields. Each field is **self-describing** vi
 
 ---
 
-## 5. Complete Frame Layout
+## 5. Complete Frame Layout & Encoding
 
 ```
-┌────────┬─────────┬────────┬────────┬──────────┬──────┬────────┬─────────┬────────────┐
-│ Header │ Payload │ CRC-16 │
-│ 8B     │ Len 1B  │ N B    │ 2B LE  │
-└────────┴─────────┴────────┴────────┘
+┌────────┬───────────┬─────────┬────────┬──────────┬──────┬────────┬─────────┬────────────┐
+│ Header │ Timestamp │ Payload │ Payload│ CRC-16 │
+│ 8B     │ 1..5B     │ Len 1B  │ N B    │ 2B LE  │
+└────────┴───────────┴─────────┴────────┘──────────┘
 ```
 
 - **Header**: see §2
+- **Timestamp**: Variable length delta-compressed timestamp.
 - **Payload Length**: 1 byte, value `0..255`
 - **Payload**: `payload_len` bytes, self-describing type tags
 - **CRC-16**: CCITT-FALSE (`poly = 0x1021`, `init = 0xFFFF`, no reflection, final XOR `0x0000`)
 
-**CRC Coverage**: Header + Payload Length + Payload.
+### 5.1 Direct-to-Ring (D2R) Mechanism
+
+AxiomTrace uses the **Direct-to-Ring (D2R)** mechanism to minimize RAM overhead and latency:
+
+1. **Zero Stack Buffering**: Instead of assembling the entire frame in a temporary stack buffer, the encoder acquires space in the ring buffer and writes fields directly to it.
+2. **Incremental CRC**: The CRC-16 is computed incrementally as each byte is written. This eliminates the need for a second pass over the frame and avoids storing the full frame on the stack.
+3. **Atomic Commit**: The ring buffer "head" is only updated after the full frame (including CRC) is successfully written, ensuring that partial or interrupted writes do not corrupt the stream.
 
 For byte-stream transports (UART, USB CDC), the entire frame may be COBS-encoded with a `0x00` delimiter. See `spec/wire_format.md` for transport variations.
 
@@ -128,8 +135,8 @@ The `text` field uses named placeholders with type hints that must match the enc
 - Maximum payload length: **255 bytes**.
 - Maximum number of modules: **256** (`module_id` is `uint8_t`).
 - Maximum events per module: **65536** (`event_id` is `uint16_t`, practically limited by ROM).
-- Header and payload are always CRC-protected.
-- Frame assembly is done on the **stack** (fixed maximum size, no malloc).
+- Header, Timestamp and payload are always CRC-protected.
+- **Stack Efficiency**: By using D2R, the stack usage is reduced to a few dozen bytes, regardless of the `AXIOM_MAX_PAYLOAD_LEN` setting. No large local arrays are required.
 
 ---
 

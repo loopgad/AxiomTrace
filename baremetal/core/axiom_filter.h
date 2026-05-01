@@ -22,6 +22,11 @@ typedef struct {
     bool     drop_pending;      /* True if drops occurred since last summary */
 } axiom_filter_t;
 
+/* Global filter instance — defined in axiom_event.c.
+ * Declared here so axiom_filter.c can access it for runtime control APIs.
+ */
+extern axiom_filter_t s_filter;
+
 /* Initialize filter (all levels/modules enabled, counters zeroed) */
 void axiom_filter_init(axiom_filter_t *filter);
 
@@ -36,6 +41,12 @@ bool axiom_filter_drop_summary_ready(axiom_filter_t *filter);
 
 /* Get drop counter and reset */
 uint32_t axiom_filter_drop_count_get_and_clear(axiom_filter_t *filter);
+
+/* Runtime filter control — implementations are in axiom_event.c where s_filter is defined */
+void axiom_level_mask_set(uint32_t mask);
+uint32_t axiom_level_mask_get(void);
+void axiom_module_mask_set(uint32_t mask);
+uint32_t axiom_module_mask_get(void);
 
 #ifdef __cplusplus
 }

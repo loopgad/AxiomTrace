@@ -21,17 +21,31 @@ A wire frame consists of:
 ```c
 [ Frame Body ]
   ├── Header (8 bytes)
+  ├── Timestamp (1..5 bytes, delta-compressed)
   ├── Payload Length (1 byte)
   ├── Payload (0..255 bytes)
   └── CRC-16 (2 bytes)
 [ Optional Transport Wrapper ]
 ```
 
-### 2.1 Byte Order
+### 2.1 Timestamp
+
+The timestamp field is auto-inserted by `axiom_write()` for every event. It uses delta compression relative to the previous event's raw timestamp (from `axiom_port_timestamp()`):
+
+| Range of delta | Bytes | Encoding |
+|---------------|-------|----------|
+| 0 – 127 | 1 | `0b0xxxxxxx` (7-bit value) |
+| 128 – 16,383 | 2 | `0b10xxxxxx` + 1 byte (13-bit value) |
+| 16,384 – 2,097,151 | 3 | `0b110xxxxx` + 2 bytes (19-bit value) |
+| 2,097,152 – 4,294,967,295 | 5 | `0xFF` + 4 bytes (full 32-bit) |
+
+The timestamp is included in the CRC-16 calculation (Header + Timestamp + Payload Length + Payload). Decoders must decode the variable-length timestamp field before locating `payload_len` at `frame[8 + ts_len]`.
+
+### 2.2 Byte Order
 
 All multi-byte fields are **little-endian** unless the transport mandates otherwise (e.g., CAN-FD uses big-endian by convention; the CAN-FD backend performs byte swap).
 
-### 2.2 Alignment
+### 2.3 Alignment
 
 Wire format is unaligned (packed). The encoder uses `memcpy` or byte-wise writes to avoid undefined behavior on unaligned access. Decoders must do the same.
 
@@ -52,6 +66,7 @@ For UART and USB CDC, the entire Frame Body is **COBS-encoded** to eliminate `0x
 - Guaranteed no `0x00` bytes inside the encoded block.
 - Single-pass encode/decode, no lookup tables required.
 - The final `0x00` delimiter guarantees resynchronization after frame loss.
+- **Blind Overwrite Compatibility**: Even if a frame is partially overwritten in a ring buffer, the next frame starting after a `0x00` delimiter can be reliably located.
 
 **Note**: COBS is applied to the **entire Frame Body** (Header + Payload Length + Payload + CRC). The delimiter is **not** part of the COBS block.
 
@@ -63,6 +78,7 @@ For UART and USB CDC, the entire Frame Body is **COBS-encoded** to eliminate `0x
 - **Coverage**: Header (8B) + Payload Length (1B) + Payload (N bytes).
 - **Computation**: Precomputed 256-byte ROM lookup table for O(n) speed.
 - **Verification**: Decoder recomputes CRC over the same range and compares with the trailing 2 bytes. Mismatch = `FRAME_INVALID`.
+- **Error Recovery**: In "Blind Overwrite" scenarios, CRC failure allows the host to detect partially overwritten frames and safely discard them without losing synchronization for subsequent frames.
 
 ---
 
@@ -89,13 +105,14 @@ For UART and USB CDC, the entire Frame Body is **COBS-encoded** to eliminate `0x
 
 ### 6.1 Valid Frame
 
-A frame is valid if andn only if:
+A frame is valid if and only if:
 
 1. `sync == 0xA5`
 2. `version` major nibble is supported (currently `0x1`)
 3. `level` upper nibble is `0`
-4. `payload_len` matches actual payload bytes read before CRC
-5. CRC-16 recomputed over Header + Payload Length + Payload matches trailing 2 bytes
+4. Timestamp is decodable (first byte after header identifies length 1/2/3/5)
+5. `payload_len` matches actual payload bytes read before CRC
+6. CRC-16 recomputed over Header + Timestamp + Payload Length + Payload matches trailing 2 bytes
 
 ### 6.2 Invalid Frame Handling
 

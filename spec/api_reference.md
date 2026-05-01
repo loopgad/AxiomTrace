@@ -60,6 +60,7 @@ AX_EVT(ERROR, COM, TIMEOUT, (uint8_t)bus_id, (uint32_t)ms);
 - The primary production API. Always compiled, regardless of profile.
 - `MOTOR`, `START` are module/event names resolved to `module_id` / `event_id` by X-Macro or codegen.
 - Arguments are type-safe via `_Generic`; mismatches cause compile errors.
+- **Direct-to-Ring (D2R)**: Encoding happens directly in the ring buffer, ensuring zero-copy and minimal stack overhead.
 - Binary frame contains only IDs and typed payload — no strings.
 
 **Requirements**:

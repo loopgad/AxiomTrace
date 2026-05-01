@@ -10,6 +10,10 @@
 
 ```yaml
 version: "1.0"
+enums:
+  ENUM_NAME:
+    <value>: "LABEL"
+    <value>: "LABEL"
 dictionary:
   <module_id_hex>:
     name: "MODULE_NAME"
@@ -22,6 +26,7 @@ dictionary:
         args:
           - name: "arg0_name"
             type: "u8|i8|u16|i16|u32|i32|f32|ts|bytes"
+            enum: "ENUM_NAME" # 可选：引用定义的枚举
           - name: "arg1_name"
             type: "..."
 ```
@@ -42,7 +47,15 @@ dictionary:
 | `{name:ts}`  | 0x08             | 压缩时间戳             |
 | `{name:bytes}`| 0x09            | 字节数组               |
 
-## 4. 代码生成 (Code Generation)
+## 4. 枚举映射 (Enum Mapping)
+
+枚举提供了一种在解码期间将原始整数值转换为描述性字符串的方法。
+
+- **定义**: 在 `enums` 键下全局定义。键是枚举名称，值是整数（作为键）到字符串的映射。
+- **映射**: 在固件中，枚举作为标准整数类型（`u8`、`u32` 等）传递。
+- **解析**: 解码器使用参数定义中的 `enum` 字段来查找适当的映射。如果收到的值在枚举中未定义，解码器应回退到显示原始整数。
+
+## 5. 代码生成 (Code Generation)
 
 `codegen` 工具读取 YAML 字典并输出：
 
@@ -50,9 +63,10 @@ dictionary:
 2. `axiom_modules_generated.h` — 模块 ID 枚举。
 3. `dictionary.json` — 供解码器使用的紧凑型 JSON 文件。
 
-## 5. 校验规则
+## 6. 校验规则
 
 - 每个 `(module_id, event_id)` 必须唯一。
 - `level` 必须与字典条目匹配；固件编码器不强制执行此操作，但校验器会在不匹配时发出警告。
 - `args` 的类型序列必须与编码后的有效载荷字段顺序一致。
 - `text` 中的占位符必须精确引用声明的 `args`。
+- 引用的 `enum` 名称必须存在于 `enums` 部分。

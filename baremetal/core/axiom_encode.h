@@ -86,6 +86,8 @@ static inline void axiom_enc_bytes(uint8_t *buf, uint8_t *pos, const uint8_t *da
 
 /* ---------------------------------------------------------------------------
  * C11 _Generic dispatcher for a single argument
+ * Note: double literals (e.g., 3.14) are NOT supported.
+ * Use float literals (e.g., 3.14f) or explicit (float)3.14 cast.
  * --------------------------------------------------------------------------- */
 #define _AXIOM_ENCODE_ONE(buf, pos, arg) \
     _Generic((arg), \

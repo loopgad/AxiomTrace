@@ -1,58 +1,65 @@
-﻿> [English](README.md) | [简体中文](README_zh.md)
+> [English](README.md) | [简体中文](README_zh.md)
 
-# AxiomTrace v1.0
+# AxiomTrace v1.0 — Industrial Observability Microkernel
 
-> MCU Bare-metal Observability Microkernel — Developer-readable, Production-low-disturbance, Fault-traceable, Protocol-freezable, Toolchain-trusted.
+AxiomTrace is a high-performance, deterministic observability core designed for bare-metal MCU environments. It transforms the way embedded logs are handled by pushing complexity to the host and keeping the firmware hot path pure, fast, and O(1).
 
 ---
 
-## Quick Start (5 Minutes)
+## 🚀 Quick Start
 
 ```c
 #include "axiomtrace.h"
 
 int main(void) {
     axiom_init();
-    AX_EVT(INFO, 0x01, 0x01, (uint16_t)3200);
+    /* Structured event: O(1), ISR-safe, 0-malloc, 0-printf */
+    AX_EVT(INFO, MOTOR, START, (uint16_t)3200); 
     return 0;
 }
 ```
 
-## Core Features
+## 💎 The Industrial Pillars
 
-- **Event Record Entity**: Firmware only contains structured binary events; text/JSON are rendered by host tools.
-- **Zero malloc / Zero printf / Zero blocking**: Hot path O(1), ISR-writable.
-- **Pluggable Backend**: Memory / UART / USB / RTT / SWO / CAN-FD, adding a backend doesn't modify the Core.
-- **Fault Capsule**: 0 Flash writes during normal operation; automatically freezes pre/post windows and commits to Flash after a fault.
-- **Profile Compile-time Pruning**: `DEV` / `FIELD` / `PROD`, `AX_LOG` and `AX_PROBE` automatically expand to empty in production.
-- **C11 `_Generic` Type Safety**: Parameter type errors are captured at compile-time.
+### ⚡ Deterministic O(1) Performance
+AxiomTrace guarantees that every log call executes in constant time. By using a **Blind Overwrite** policy and a bitwise-mask ring buffer, it avoids expensive frame boundary searches during interrupts.
 
-## Architecture
+### 🧬 Direct-to-Ring (D2R) Technology
+Unlike traditional loggers that assemble frames on the stack, AxiomTrace writes data **directly into the ring buffer segments**. Coupled with **Incremental CRC**, it eliminates redundant memory copies and massive stack frame allocations.
+
+### 🌐 Dual-Track Time Synchronization
+Supports high-resolution relative counters for precise timing analysis, while allowing periodic Unix timestamp injection for real-world wall-clock alignment on the host side.
+
+### 🎨 Rich Host-side Semantics
+Keep your firmware binary lean by storing only raw IDs and integers. Use the **Host Dictionary** to map IDs back to human-readable text, enums, physical units, and rich metadata.
+
+---
+
+## 🛠️ Key Features
+
+- **Protocol-Entity Architecture**: Text/JSON/Binary are just views; the Event Record is the only truth.
+- **Pluggable Backends**: UART, USB, RTT, SWO, or Flash Capsule — add new ones without touching the core.
+- **Fault Capsule**: Automatically freezes pre/post windows during critical faults and commits to non-volatile storage.
+- **Profile-based Pruning**: `PROD` profile automatically removes debug probes and logs at compile-time.
+- **Bilingual Documentation**: Seamless transition between English and 简体中文 for global collaboration.
+
+---
+
+## 🏗️ Architecture
 
 ```text
 AxiomTrace/
   Frontend Plane   AX_LOG / AX_EVT / AX_PROBE / AX_FAULT / AX_KV
-  Core Plane       Ring → Encode → Filter → Timestamp → CRC → Drop Stats
-  Backend Plane    Memory / UART / USB / RTT / SWO / CAN-FD / Flash Capsule
-  Tool Plane       Decoder / Text Render / JSON Export / Golden Test
+  Core Plane       Direct-to-Ring (D2R) → Incremental CRC → Filter → Bit-Mask Ring
+  Backend Plane    UART / RTT / USB / SWO / Flash Capsule / CAN-FD
+  Tool Plane       Python Decoder / Text Render / JSON Export / Golden Test
 ```
 
-## Roadmap
+---
 
-| Version | Goal |
-| :--- | :--- |
-| v0.1-core | Core Provable |
-| v0.2-wire | Wire Format Freezable |
-| v0.3-frontend | Frontend Usable |
-| v0.4-backend | Backend Pluggable |
-| v0.5-probe | Probe Timing Investigation Mature |
-| v0.6-capsule | Fault Capsule Mature |
-| v0.7-toolchain | Toolchain Complete |
-| v0.8-portability | Cross-platform Validation |
-| v0.9-rc | Release Candidate |
-| v1.0-stable | Stable Release |
+## 📦 Getting Started
 
-## Build
+### 1. Build & Test
 
 ```bash
 cmake -B build -S . -DAXIOM_BUILD_TESTS=ON
@@ -60,75 +67,30 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-## Python Toolchain
-
-AxiomTrace provides a Python package for decoding binary logs on the host side.
-
-### Installation
+### 2. Python Toolchain
 
 ```bash
-pip install axiomtrace
+# Install the decoder
+pip install ./tool
+
+# Decode a binary stream
+axiom-decoder trace.bin -d events.yaml -o text
 ```
 
-Or install from source:
+---
 
-```bash
-cd tool
-pip install -e .
-```
+## 📚 Documentation Index
 
-### CLI Usage
+| Specification | Description |
+| :--- | :--- |
+| [API Reference](spec/api_reference.md) | Frontend macros and Core control APIs |
+| [Wire Format](spec/wire_format.md) | Binary serialization and framing (COBS) |
+| [Event Model](spec/event_model.md) | Header layout and D2R mechanics |
+| [Dictionary Spec](spec/event_dictionary.md) | YAML schema and Enum mapping |
+| [Rules & Policy](RULES.md) | Engineering standards and hot-path mandates |
 
-After installing, the `axiom-decoder` command is available:
+---
 
-```bash
-# Decode binary log to text
-axiom-decoder <input.bin> -o text > output.txt
+## 📜 License
 
-# Export to JSON
-axiom-decoder <input.bin> -o json > output.json
-
-# Use dictionary file for symbolic output
-axiom-decoder <input.bin> -d dictionary.json -o text
-
-# Show help
-axiom-decoder --help
-```
-
-### Python API
-
-```python
-from axiomtrace_tools.decoder import decode_stream
-
-# Decode binary file
-with open("trace.bin", "rb") as f:
-    raw = f.read()
-
-frames = decode_stream(raw)
-
-# Process frames
-for frame in frames:
-    if 'error' in frame:
-        print(f"[ERROR: {frame['error']}]")
-        continue
-    print(f"[{frame['seq']:4d}] [{frame['level']:5s}] mod=0x{frame['module_id']:02X} evt=0x{frame['event_id']:04X}")
-```
-
-## Directory Structure
-
-```text
-baremetal/
-  core/         Ring, Event, Encode, CRC, Timestamp, Filter
-  frontend/     AX_LOG/EVT/PROBE/FAULT/KV macros, Profile control
-  backend/      Backend contract, registry, templates
-  port/         Platform abstraction (weak symbols)
-  examples/     Minimal and full examples
-  axiomtrace.h  Unified public header
-spec/           Protocol and API specifications
-tool/           Python decoder, golden tests, benchmark, scripts
-tests/          Host unit tests
-```
-
-## License
-
-[LICENSE](LICENSE)
+[MIT LICENSE](LICENSE)

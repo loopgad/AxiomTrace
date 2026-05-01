@@ -3,6 +3,7 @@
 
 #include "axiom_backend.h"
 #include "axiom_ring.h"
+#include "axiom_event.h"
 #include <stdint.h>
 #include <stddef.h>
 

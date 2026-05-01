@@ -14,6 +14,7 @@
 #ifndef AXIOMTRACE_H
 #define AXIOMTRACE_H
 
+#include "axiom_config.h"
 #include "axiom_static_assert.h"
 #include "axiom_port.h"
 #include "axiom_event.h"

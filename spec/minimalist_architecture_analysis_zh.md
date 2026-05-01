@@ -164,22 +164,17 @@ static void _ring_put(const uint8_t *data, uint8_t len) {
 
 void axiom_write(axiom_level_t lvl, uint8_t mod, uint16_t evt,
                  const uint8_t *payload, uint8_t len) {
-    uint8_t buf[AXIOM_RING_SIZE]; /* 在栈上临时组帧 */
-    uint8_t p = 0;
-    buf[p++] = 0xA5;
-    buf[p++] = 0x10; /* v1.0 */
-    buf[p++] = (uint8_t)lvl;
-    buf[p++] = mod;
-    buf[p++] = evt & 0xFF;
-    buf[p++] = evt >> 8;
-    uint16_t seq = _seq++;
-    buf[p++] = seq & 0xFF;
-    buf[p++] = seq >> 8;
-    buf[p++] = len;
-    for (uint8_t i = 0; i < len; i++) buf[p++] = payload[i];
-    /* CRC-16 占位符 */
-    buf[p++] = 0; buf[p++] = 0;
-    _ring_put(buf, p);
+    /* Direct-to-Ring (D2R) 实现 */
+    axiom_critical_enter();
+    uint16_t total_len = 8 + 1 + len + 2; /* 报头 + 长度 + 有效载荷 + CRC (为简洁忽略变长时间戳) */
+    if (_ring_has_space(total_len)) {
+        uint16_t pos = _ring_acquire(total_len);
+        _ring_put_byte_at(pos++, 0xA5);
+        _ring_put_byte_at(pos++, 0x10);
+        /* ... 直接写入其他字段并同步计算增量 CRC ... */
+        _ring_commit(total_len);
+    }
+    axiom_critical_exit();
 }
 
 /* 后端调度：最简单的轮询实现 */
@@ -318,7 +313,7 @@ int main(void) {
 | 方案 | 文件数量 | 构成 | 适用场景 |
 |----------|------------|-------------|----------|
 | **极端极简** | 2 | `axiom.h` + `axiom.c` | 快速验证、教学、超小项目。 |
-| **推荐默认** | 3 | `axiom.h` + `axiom.c` + `axiom_events.h` | 需要模块/事件管理的正式项目。 |
+| **推荐默认** | 3 | `axiom.h` + `axiom.c` + `axiom_events.h` (+ D2R) | 需要模块/事件管理的正式项目。 |
 | **当前设计** | 14+ | 7 个 .h + 7 个 .c + 各类 backend | 分拆过度，应推迟到 v0.5+。 |
 
 **3 文件方案的内容分配**：

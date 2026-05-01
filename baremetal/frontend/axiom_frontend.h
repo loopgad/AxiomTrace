@@ -4,6 +4,7 @@
 #include "axiom_event.h"
 #include "axiom_encode.h"
 #include "axiom_port.h"
+#include "axiom_filter.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,6 +38,13 @@ void axiom_write(axiom_level_t level, uint8_t module_id, uint16_t event_id,
                  const uint8_t *payload, uint8_t payload_len);
 void axiom_init(void);
 void axiom_flush(void);
+
+/* Runtime filter control — declared in axiom_filter.h, exposed here for convenience.
+ * void axiom_level_mask_set(uint32_t mask);
+ * uint32_t axiom_level_mask_get(void);
+ * void axiom_module_mask_set(uint32_t mask);
+ * uint32_t axiom_module_mask_get(void);
+ */
 
 /* ---------------------------------------------------------------------------
  * FNV-1a 16-bit hash (runtime, for key hashing)
@@ -80,6 +88,48 @@ static inline uint16_t _axiom_fnv1a_16(const char *s) {
          _AXIOM_ENCODE_ONE(_b, _p, a2); \
          _AXIOM_ENCODE_ONE(_b, _p, a3); \
          _AXIOM_ENCODE_ONE(_b, _p, a4); \
+         axiom_write((level), (mod), (evt), _b, _p); } while(0)
+
+#define _AXIOM_EVT_5(level, mod, evt, a1, a2, a3, a4, a5) \
+    do { uint8_t _b[AXIOM_MAX_PAYLOAD_LEN]; uint8_t _p = 0; \
+         _AXIOM_ENCODE_ONE(_b, _p, a1); \
+         _AXIOM_ENCODE_ONE(_b, _p, a2); \
+         _AXIOM_ENCODE_ONE(_b, _p, a3); \
+         _AXIOM_ENCODE_ONE(_b, _p, a4); \
+         _AXIOM_ENCODE_ONE(_b, _p, a5); \
+         axiom_write((level), (mod), (evt), _b, _p); } while(0)
+
+#define _AXIOM_EVT_6(level, mod, evt, a1, a2, a3, a4, a5, a6) \
+    do { uint8_t _b[AXIOM_MAX_PAYLOAD_LEN]; uint8_t _p = 0; \
+         _AXIOM_ENCODE_ONE(_b, _p, a1); \
+         _AXIOM_ENCODE_ONE(_b, _p, a2); \
+         _AXIOM_ENCODE_ONE(_b, _p, a3); \
+         _AXIOM_ENCODE_ONE(_b, _p, a4); \
+         _AXIOM_ENCODE_ONE(_b, _p, a5); \
+         _AXIOM_ENCODE_ONE(_b, _p, a6); \
+         axiom_write((level), (mod), (evt), _b, _p); } while(0)
+
+#define _AXIOM_EVT_7(level, mod, evt, a1, a2, a3, a4, a5, a6, a7) \
+    do { uint8_t _b[AXIOM_MAX_PAYLOAD_LEN]; uint8_t _p = 0; \
+         _AXIOM_ENCODE_ONE(_b, _p, a1); \
+         _AXIOM_ENCODE_ONE(_b, _p, a2); \
+         _AXIOM_ENCODE_ONE(_b, _p, a3); \
+         _AXIOM_ENCODE_ONE(_b, _p, a4); \
+         _AXIOM_ENCODE_ONE(_b, _p, a5); \
+         _AXIOM_ENCODE_ONE(_b, _p, a6); \
+         _AXIOM_ENCODE_ONE(_b, _p, a7); \
+         axiom_write((level), (mod), (evt), _b, _p); } while(0)
+
+#define _AXIOM_EVT_8(level, mod, evt, a1, a2, a3, a4, a5, a6, a7, a8) \
+    do { uint8_t _b[AXIOM_MAX_PAYLOAD_LEN]; uint8_t _p = 0; \
+         _AXIOM_ENCODE_ONE(_b, _p, a1); \
+         _AXIOM_ENCODE_ONE(_b, _p, a2); \
+         _AXIOM_ENCODE_ONE(_b, _p, a3); \
+         _AXIOM_ENCODE_ONE(_b, _p, a4); \
+         _AXIOM_ENCODE_ONE(_b, _p, a5); \
+         _AXIOM_ENCODE_ONE(_b, _p, a6); \
+         _AXIOM_ENCODE_ONE(_b, _p, a7); \
+         _AXIOM_ENCODE_ONE(_b, _p, a8); \
          axiom_write((level), (mod), (evt), _b, _p); } while(0)
 
 #define _AXIOM_EVT_DISPATCH(level, mod, evt, ...) \

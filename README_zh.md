@@ -1,58 +1,65 @@
-﻿> [English](README.md) | [简体中文](README_zh.md)
+> [English](README.md) | [简体中文](README_zh.md)
 
-# AxiomTrace v1.0
+# AxiomTrace v1.0 — 工业级 MCU 可观测微内核
 
-> MCU 裸机可观测微内核 — 开发可读、量产低扰动、故障可追溯、协议可冻结、工具链可信。
+AxiomTrace 是一个专为 MCU 裸机环境设计的高性能、确定性可观测性核心。它通过将复杂性推向主机端，并保持固件热路径纯净、快速且具备 O(1) 特性，彻底改变了嵌入式日志的处理方式。
 
 ---
 
-## 快速开始（5 分钟）
+## 🚀 快速开始
 
 ```c
 #include "axiomtrace.h"
 
 int main(void) {
     axiom_init();
-    AX_EVT(INFO, 0x01, 0x01, (uint16_t)3200);
+    /* 结构化事件：O(1)、中断安全、零 malloc、零 printf */
+    AX_EVT(INFO, MOTOR, START, (uint16_t)3200); 
     return 0;
 }
 ```
 
-## 核心特性
+## 💎 工业级四大支柱
 
-- **Event Record 本体**：固件中只有结构化二进制事件，文本/JSON 由主机工具渲染。
-- **零 malloc / 零 printf / 零阻塞**：热路径 O(1)，ISR 可写。
-- **Backend 可插拔**：Memory / UART / USB / RTT / SWO / CAN-FD，新增后端不修改 Core。
-- **Fault Capsule**：正常运行 0 Flash 写入，故障后自动冻结 pre/post 窗口并 commit 到 Flash。
-- **Profile 编译期裁剪**：`DEV` / `FIELD` / `PROD`，量产时 `AX_LOG` 和 `AX_PROBE` 自动展开为空。
-- **C11 `_Generic` 类型安全**：参数类型错误在编译期捕获。
+### ⚡ 确定性的 O(1) 性能
+AxiomTrace 保证每个日志调用的执行时间都是恒定的。通过采用 **“盲覆盖 (Blind Overwrite)”** 策略和位掩码环形缓冲区，它避免了中断期间昂贵的帧边界搜索。
 
-## 架构
+### 🧬 直接入环 (D2R) 技术
+与在栈上组帧的传统记录器不同，AxiomTrace 将数据 **直接写入环形缓冲区段**。配合 **增量 CRC (Incremental CRC)**，它消除了冗余的内存拷贝和巨大的栈空间占用。
+
+### 🌐 双轨时间同步
+支持高分辨率相对计数器，用于精确的时序分析；同时允许周期性注入 Unix 时间戳，以便在主机端实现真实世界的“墙上时间”对齐。
+
+### 🎨 丰富的宿主侧语义
+通过仅存储原始 ID 和整数，保持固件二进制文件的精简。利用 **主机字典 (Host Dictionary)** 将 ID 映射回人类可读的文本、枚举、物理单位和丰富的元数据。
+
+---
+
+## 🛠️ 核心特性
+
+- **协议即本体架构**：文本/JSON/二进制只是视图；事件记录 (Event Record) 是唯一的真理。
+- **可插拔后端**：UART、USB、RTT、SWO 或 Flash 舱 (Capsule) — 无需触碰核心即可添加新后端。
+- **故障舱 (Fault Capsule)**：在发生严重故障期间自动冻结故障前/后窗口，并提交至非易失性存储。
+- **基于 Profile 的裁剪**：`PROD` 配置会在编译期自动移除调试探针和日志，实现零成本运行。
+- **双语文档**：英文与简体中文之间的无缝切换，助力全球化协作。
+
+---
+
+## 🏗️ 架构
 
 ```text
 AxiomTrace/
-  Frontend Plane   AX_LOG / AX_EVT / AX_PROBE / AX_FAULT / AX_KV
-  Core Plane       Ring → Encode → Filter → Timestamp → CRC → Drop Stats
-  Backend Plane    Memory / UART / USB / RTT / SWO / CAN-FD / Flash Capsule
-  Tool Plane       Decoder / Text Render / JSON Export / Golden Test
+  前端平面 (Frontend)   AX_LOG / AX_EVT / AX_PROBE / AX_FAULT / AX_KV
+  核心平面 (Core)       直接入环 (D2R) → 增量 CRC → 过滤器 → 位掩码环
+  后端平面 (Backend)    UART / RTT / USB / SWO / Flash 舱 / CAN-FD
+  工具平面 (Tool)       Python 解码器 / 文本渲染 / JSON 导出 / Golden 测试
 ```
 
-## 版本路线
+---
 
-| 版本 | 目标 |
-| :--- | :--- |
-| v0.1-core | Core 可证明 |
-| v0.2-wire | Wire Format 可冻结 |
-| v0.3-frontend | Frontend 可用 |
-| v0.4-backend | Backend 可插拔 |
-| v0.5-probe | Probe 时序探查成熟 |
-| v0.6-capsule | Fault Capsule 成熟 |
-| v0.7-toolchain | Toolchain 完整 |
-| v0.8-portability | 跨平台验证 |
-| v0.9-rc | Release Candidate |
-| v1.0-stable | 稳定发布 |
+## 📦 开始使用
 
-## 构建
+### 1. 构建与测试
 
 ```bash
 cmake -B build -S . -DAXIOM_BUILD_TESTS=ON
@@ -60,75 +67,30 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-## Python 工具链
-
-AxiomTrace 提供 Python 包用于在主机端解码二进制日志。
-
-### 安装
+### 2. Python 工具链
 
 ```bash
-pip install axiomtrace
+# 安装解码器
+pip install ./tool
+
+# 解码二进制流
+axiom-decoder trace.bin -d events.yaml -o text
 ```
 
-或从源码安装:
+---
 
-```bash
-cd tool
-pip install -e .
-```
+## 📚 文档索引
 
-### CLI 使用方法
+| 规范文档 | 描述 |
+| :--- | :--- |
+| [API 参考手册](spec/api_reference.md) | 前端宏与核心控制 API |
+| [有线格式规范](spec/wire_format.md) | 二进制序列化与成帧 (COBS) |
+| [事件模型规范](spec/event_model.md) | 报头布局与 D2R 机制 |
+| [字典规范](spec/event_dictionary.md) | YAML Schema 与枚举映射 |
+| [工程规则与准则](RULES.md) | 工程标准与热路径铁律 |
 
-安装后，`axiom-decoder` 命令可用:
+---
 
-```bash
-# 解码二进制日志为文本
-axiom-decoder <input.bin> -o text > output.txt
+## 📜 许可证
 
-# 导出为 JSON
-axiom-decoder <input.bin> -o json > output.json
-
-# 使用字典文件进行符号化输出
-axiom-decoder <input.bin> -d dictionary.json -o text
-
-# 显示帮助
-axiom-decoder --help
-```
-
-### Python API
-
-```python
-from axiomtrace_tools.decoder import decode_stream
-
-# 解码二进制文件
-with open("trace.bin", "rb") as f:
-    raw = f.read()
-
-frames = decode_stream(raw)
-
-# 处理帧
-for frame in frames:
-    if 'error' in frame:
-        print(f"[ERROR: {frame['error']}]")
-        continue
-    print(f"[{frame['seq']:4d}] [{frame['level']:5s}] mod=0x{frame['module_id']:02X} evt=0x{frame['event_id']:04X}")
-```
-
-## 目录结构
-
-```text
-baremetal/
-  core/         Ring, Event, Encode, CRC, Timestamp, Filter
-  frontend/     AX_LOG/EVT/PROBE/FAULT/KV macros, Profile control
-  backend/      Backend contract, registry, templates
-  port/         Platform abstraction (weak symbols)
-  examples/     Minimal and full examples
-  axiomtrace.h  Unified public header
-spec/           Protocol and API specifications
-tool/           Python decoder, golden tests, benchmark, scripts
-tests/          Host unit tests
-```
-
-## 许可
-
-[LICENSE](LICENSE)
+[MIT LICENSE](LICENSE)

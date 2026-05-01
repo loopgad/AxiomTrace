@@ -41,7 +41,9 @@ AxiomTrace 是一个 **MCU 裸机可观测微内核**。我们的坚定目标：
 | 字符串比较/查找 | 禁止运行时解析字符串。 | 拒绝合入。 |
 
 **允许项**：
-- 固定最大长度帧编码（栈上组装，无动态分配）。
+- Direct-to-Ring (D2R) 编码（直接流式写入环形缓冲区分段）。
+- 盲覆盖（Blind Overwrite）策略，确保环满时具备 O(1) 确定性延迟。
+- 增量式 CRC（流式计算，无需重复读取内存）。
 - 写 RAM Ring（单次临界区）。
 - 更新全局 drop counter (`volatile uint32_t` 自增)。
 - 轻量 timestamp（32-bit 计数器读取或 delta 编码）。

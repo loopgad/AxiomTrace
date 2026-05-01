@@ -18,14 +18,20 @@ typedef struct {
     volatile uint32_t head;
     volatile uint32_t tail;
     uint32_t capacity;
+    uint32_t mask;
     uintptr_t reserved;
 } axiom_ring_t;
 
-/* Initialize ring buffer in the provided memory block */
+/* Initialize ring buffer in the provided memory block. 
+ * 'size' must be a power of two. */
 void axiom_ring_init(axiom_ring_t *ring, uint8_t *buf, uint32_t size);
 
 /* Write data to ring. Returns true on success, false if dropped. */
 bool axiom_ring_write(axiom_ring_t *ring, const uint8_t *data, uint16_t len);
+
+/* Write a chunk to the ring and optionally update CRC.
+ * Internal use only, requires caller to handle critical section and capacity check. */
+void axiom_ring_write_chunk(axiom_ring_t *ring, const uint8_t *data, uint16_t len, uint16_t *crc);
 
 /* Read up to max_len bytes from ring. Returns bytes read. */
 uint16_t axiom_ring_read(axiom_ring_t *ring, uint8_t *out, uint16_t max_len);
@@ -40,7 +46,7 @@ static inline uint32_t axiom_ring_used(const axiom_ring_t *ring) {
 
 /* Free space */
 static inline uint32_t axiom_ring_free(const axiom_ring_t *ring) {
-    return ring->capacity - axiom_ring_used(ring);
+    return ring->capacity - (ring->head - ring->tail);
 }
 
 /* Reset ring to empty */

@@ -41,7 +41,9 @@ The following behaviors are **strictly prohibited** in `axiom_write()` and all I
 | String compare/search | Runtime string parsing is prohibited. | Rejection of PR. |
 
 **Allowed Items**:
-- Fixed maximum length frame encoding (assembled on stack, no dynamic allocation).
+- Direct-to-Ring (D2R) encoding (streaming directly into ring buffer segments).
+- Blind Overwrite strategy for O(1) deterministic latency when the ring is full.
+- Incremental CRC (streaming calculation without re-reading memory).
 - Writing to RAM Ring (single critical section).
 - Updating global drop counter (`volatile uint32_t` increment).
 - Lightweight timestamp (reading 32-bit counter or delta encoding).

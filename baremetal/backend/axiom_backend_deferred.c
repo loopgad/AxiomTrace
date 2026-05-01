@@ -45,7 +45,8 @@ static int deferred_flush(void *ctx) {
 
     /*
      * 将 deferred ring 中的数据级联到下游 backend。
-     * 使用逐帧读取并转发的方式，保证下游 backend 的帧边界。
+     * 使用逐帧 peek → read → dispatch 方式，保证下游 backend 的帧边界。
+     * 即使下游 write() 失败（busy），也继续处理下一帧，避免死锁。
      *
      * @note 此函数应在非 ISR 上下文中调用（通常在 main loop 或
      *       专门的后台任务中调用 axiom_backend_flush_all）。
@@ -53,31 +54,32 @@ static int deferred_flush(void *ctx) {
      */
     axiom_ring_t *ring = &d->deferred_ring.ring;
     const axiom_backend_t *downstream = d->downstream;
-    uint8_t frame_buf[AXIOM_DEFERRED_RING_SIZE];  /* 临时缓冲区 */
+    uint8_t frame_buf[AXIOM_MAX_FRAME_LEN];
+    int dispatched = 0;
 
     while (axiom_ring_used(ring) > 0) {
-        /*
-         * 读取单帧数据。假设帧格式由上层协议决定，
-         * 此处按最大长度读取。实际使用时可能需要解析帧头
-         * 来获取精确的帧长度。
-         */
-        uint16_t n = axiom_ring_read(ring, frame_buf, sizeof(frame_buf));
-        if (n == 0) {
-            break;
+        uint16_t avail = axiom_ring_peek(ring, frame_buf, sizeof(frame_buf));
+        if (avail < 12) break; /* minimum: 8 header + 1 ts + 1 len + 0 payload + 2 crc */
+        /* Decode variable-length timestamp to locate payload_len */
+        uint8_t ts_len = 1;
+        uint8_t fb0 = frame_buf[8];
+        if (fb0 >= 0xC0) {
+            ts_len = (fb0 == 0xFFu) ? 5 : 3;
+        } else if (fb0 >= 0x80) {
+            ts_len = 2;
         }
-
-        /*
-         * 转发到下游 backend。如果下游未就绪或写入失败，
-         * 仍然继续尝试（部分数据可能已丢失）。
-         */
+        uint16_t payload_len = frame_buf[8 + ts_len];
+        uint16_t frame_len = (uint16_t)(8u + ts_len + 1u + payload_len + 2u);
+        if (avail < frame_len) break;
+        /* Read exact frame and forward */
+        uint16_t n = axiom_ring_read(ring, frame_buf, frame_len);
+        if (n == 0) break;
         if (downstream->write) {
             (void)downstream->write(frame_buf, n, downstream->ctx);
         }
+        dispatched++;
     }
-
-    /* 重置 ring 为空状态 */
-    axiom_ring_reset(ring);
-    return 0;
+    return dispatched;
 }
 
 static int deferred_panic_write(const uint8_t *data, uint16_t len, void *ctx) {

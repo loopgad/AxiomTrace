@@ -1,5 +1,6 @@
 #include "axiom_ring.h"
 #include "axiom_port.h"
+#include "axiom_crc.h"
 #include <string.h>
 #include <stdint.h>
 
@@ -18,10 +19,27 @@
 /* Internal: store data buffer pointer in reserved field */
 #define RING_BUF(ring) ((uint8_t *)(ring)->reserved)
 
+void axiom_ring_write_chunk(axiom_ring_t *ring, const uint8_t *data, uint16_t len, uint16_t *crc) {
+    uint32_t head = ring->head;
+    uint32_t mask = ring->mask;
+    uint8_t *buf = RING_BUF(ring);
+    
+    for (uint16_t i = 0; i < len; ++i) {
+        uint8_t b = data[i];
+        buf[head & mask] = b;
+        head++;
+        if (crc) {
+            *crc = axiom_crc16_update(*crc, b);
+        }
+    }
+    ring->head = head;
+}
+
 void axiom_ring_init(axiom_ring_t *ring, uint8_t *buf, uint32_t size) {
     ring->head = 0;
     ring->tail = 0;
     ring->capacity = size;
+    ring->mask = size - 1;
     ring->reserved = (uintptr_t)buf;
 }
 
@@ -35,6 +53,7 @@ bool axiom_ring_write(axiom_ring_t *ring, const uint8_t *data, uint16_t len) {
     uint32_t head = ring->head;
     uint32_t tail = ring->tail;
     uint32_t cap  = ring->capacity;
+    uint32_t mask = ring->mask;
     uint32_t used = head - tail;
     uint8_t *buf  = RING_BUF(ring);
 
@@ -43,15 +62,15 @@ bool axiom_ring_write(axiom_ring_t *ring, const uint8_t *data, uint16_t len) {
         axiom_port_critical_exit();
         return false;
 #else
-        while (used + len > cap) {
-            tail++;
-            used = head - tail;
-        }
+        /* OVERWRITE: blind advancement of tail to maintain O(1).
+         * Decoder is responsible for handling partially overwritten frames.
+         */
+        tail = (head + len) - cap;
 #endif
     }
 
     for (uint16_t i = 0; i < len; ++i) {
-        buf[(head + i) % cap] = data[i];
+        buf[(head + i) & mask] = data[i];
     }
     ring->head = head + len;
     ring->tail = tail;
@@ -67,13 +86,13 @@ uint16_t axiom_ring_read(axiom_ring_t *ring, uint8_t *out, uint16_t max_len) {
 
     uint32_t head = ring->head;
     uint32_t tail = ring->tail;
-    uint32_t cap  = ring->capacity;
+    uint32_t mask = ring->mask;
     uint32_t avail = head - tail;
     uint16_t n = (avail < max_len) ? (uint16_t)avail : max_len;
     uint8_t *buf = RING_BUF(ring);
 
     for (uint16_t i = 0; i < n; ++i) {
-        out[i] = buf[(tail + i) % cap];
+        out[i] = buf[(tail + i) & mask];
     }
     ring->tail = tail + n;
 
@@ -88,13 +107,13 @@ uint16_t axiom_ring_peek(const axiom_ring_t *ring, uint8_t *out, uint16_t max_le
 
     uint32_t head = ring->head;
     uint32_t tail = ring->tail;
-    uint32_t cap  = ring->capacity;
+    uint32_t mask = ring->mask;
     uint32_t avail = head - tail;
     uint16_t n = (avail < max_len) ? (uint16_t)avail : max_len;
     const uint8_t *buf = (const uint8_t *)ring->reserved;
 
     for (uint16_t i = 0; i < n; ++i) {
-        out[i] = buf[(tail + i) % cap];
+        out[i] = buf[(tail + i) & mask];
     }
 
     axiom_port_critical_exit();
