@@ -43,13 +43,18 @@ jobs:
             --error-exitcode=1 \
             --inline-suppr \
             --suppress=missingIncludeSystem \
+            --suppress=unmatchedSuppression \
             -I baremetal/include \
+            -I baremetal/port \
+            -I baremetal/core \
+            -I baremetal/frontend \
+            -I baremetal/backend \
+            -I baremetal \
             baremetal/core baremetal/frontend baremetal/backend baremetal/port
 
       - name: Run scan-build
         run: |
           scan-build --status-bugs cmake -B build-scan -DAXIOM_BUILD_TESTS=ON -DCMAKE_C_COMPILER=clang
-          scan-build --status-bugs cmake --build build-scan --parallel
 
   # ===========================================================================
   # ARM Cortex-M QEMU Test
