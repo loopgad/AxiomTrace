@@ -86,6 +86,9 @@ jobs:
           cmake -B build-cortex-m \
             -DAXIOM_PLATFORM=cortex-m \
             -DAXIOM_SOC=generic \
+            -DCMAKE_SYSTEM_NAME=Generic \
+            -DCMAKE_SYSTEM_PROCESSOR=cortex-m3 \
+            -DCMAKE_C_FLAGS="-mcpu=cortex-m3 -mthumb -nostdlib" \
             -DAXIOM_BUILD_TESTS=ON
 
       - name: Build Cortex-M
