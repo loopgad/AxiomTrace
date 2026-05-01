@@ -1,6 +1,8 @@
 # AxiomTrace Platform Reference
 
-> 版本: v1.0  |  状态: 现行
+> [English](platform_reference.md) | [简体中文](platform_reference.md)
+>
+> 版本: v1.0  |  状态: 现行（中英双语合并文档）
 
 ---
 

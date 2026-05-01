@@ -1,4 +1,4 @@
-> [English](DIR_STRUCTURE.md) | [简体中文](DIR_STRUCTURE.md)
+> [English](DIR_STRUCTURE.md)
 
 # AxiomTrace Directory Structure
 

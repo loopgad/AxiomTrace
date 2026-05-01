@@ -1,6 +1,8 @@
 # AxiomTrace Porting Guide
 
-> 版本: v1.0  |  状态: 现行
+> [English](porting_guide.md) | [简体中文](porting_guide.md)
+>
+> 版本: v1.0  |  状态: 现行（中英双语合并文档）
 
 ---
 

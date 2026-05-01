@@ -94,6 +94,6 @@ axiom-decoder trace.bin -d events.yaml -o text
 
 ---
 
-## 📜 许可证
+## 许可证
 
-[MIT LICENSE](LICENSE)
+[GNU General Public License v3.0](LICENSE)
