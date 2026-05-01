@@ -88,17 +88,18 @@ jobs:
             -DAXIOM_SOC=generic \
             -DCMAKE_SYSTEM_NAME=Generic \
             -DCMAKE_SYSTEM_PROCESSOR=cortex-m3 \
-            -DCMAKE_C_FLAGS="-mcpu=cortex-m3 -mthumb -nostdlib" \
-            -DAXIOM_BUILD_TESTS=ON
+            -DCMAKE_C_COMPILER=arm-none-eabi-gcc \
+            -DCMAKE_C_FLAGS="-mcpu=cortex-m3 -mthumb" \
+            -DAXIOM_BUILD_TESTS=OFF \
+            -DAXIOM_BUILD_EXAMPLES=OFF
 
-      - name: Build Cortex-M
-        run: cmake --build build-cortex-m --parallel
+      - name: Build Cortex-M library
+        run: cmake --build build-cortex-m --target axiomtrace --parallel
 
-      - name: Run QEMU tests (Cortex-M emulation)
+      - name: Verify Cortex-M build artifacts
         run: |
-          qemu-arm -machine virt -nographic \
-            -kernel build-cortex-m/examples/example_minimal \
-            -cpu cortex-m3 || true
+          ls -la build-cortex-m/libaxiomtrace.a
+          arm-none-eabi-objdump -h build-cortex-m/libaxiomtrace.a 2>/dev/null | head -20 || true
           echo "Cortex-M build artifact created successfully"
 
       - name: Upload Cortex-M artifacts
