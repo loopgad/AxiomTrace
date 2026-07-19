@@ -117,7 +117,7 @@ jobs:
       - name: Install cross compilers
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build gcc-arm-none-eabi gcc-riscv64-unknown-elf
+          sudo apt-get install -y ninja-build gcc-arm-none-eabi gcc-riscv64-unknown-elf picolibc-riscv64-unknown-elf
       - name: ARM preset builds and budgets
         run: |
           for preset in tiny prod field dev; do
@@ -139,7 +139,7 @@ jobs:
             -DAXIOM_BUILD_TESTS=OFF -DAXIOM_BUILD_EXAMPLES=OFF \
             -DCMAKE_BUILD_TYPE=MinSizeRel -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
             -DCMAKE_C_COMPILER=riscv64-unknown-elf-gcc \
-            -DCMAKE_C_FLAGS="-march=rv32imac -mabi=ilp32 -fstack-usage"
+            -DCMAKE_C_FLAGS="-march=rv32imac_zicsr -mabi=ilp32 -fstack-usage -isystem /usr/lib/picolibc/riscv64-unknown-elf/include"
             cmake --build build-riscv --parallel
       - uses: actions/upload-artifact@v4
         with:
