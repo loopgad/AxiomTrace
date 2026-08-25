@@ -30,12 +30,23 @@ def metadata_id_for_data(
     wire_version: str = WIRE_VERSION,
 ) -> str:
     """Hash the host-side data required to safely interpret a trace."""
+    if not isinstance(dictionary, dict):
+        raise ValueError("metadata dictionary must be an object")
+    if not isinstance(source_map, dict):
+        raise ValueError("metadata source map must be an object")
+    if not isinstance(location, dict):
+        raise ValueError("metadata location must be an object")
+    identity_source_map = dict(source_map)
+    # These indexes are derived lookup accelerators.  They must not change the
+    # identity of the wire metadata they describe.
+    identity_source_map.pop("hash_index", None)
+    identity_source_map.pop("hash_collisions", None)
     identity_input = {
         "schema": "axiomtrace.metadata_identity.v1",
         "wire_version": wire_version,
         "location": location,
         "dictionary": dictionary,
-        "source_map": source_map,
+        "source_map": identity_source_map,
     }
     encoded = json.dumps(identity_input, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()[:METADATA_ID_HEX_LEN]

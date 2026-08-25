@@ -15,6 +15,34 @@
 
 硬件工程需要自行实现全部 `axiom_port_*` 时，在实现 TU 定义 `AXIOMTRACE_NO_DEFAULT_PORT`，以排除 generic weak defaults。
 
+对于模块化 CMake target，请使用 `AXIOM_PORT_SOURCE=NONE`，不要依赖 generic
+或架构 provider 的隐式选择（`AXIOM_EXTERNAL_PORT=ON` 仅是已弃用的兼容别名）。
+消费方固件负责完整 Port 契约以及目标编译器/链接器配置。
+
+## 安装主机工具
+
+在仓库根目录的隔离环境中安装 Python 3.12 包及其命令行入口，也适用于
+启用 PEP 668 的 Python：
+
+```sh
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install ./tool
+```
+
+只有事件定义使用 YAML 时才需要额外安装 YAML 解析器：
+
+```sh
+python -m pip install "./tool[yaml]"
+```
+
+仓库也提供锁定的 `uv` 路径：
+
+```sh
+uv sync --project tool
+uv run --project tool axiom-decoder trace.bin --format raw
+```
+
 ## 已安装命令
 
 Python 3.12 包 `axiomtrace-tools` 安装四个命令：
@@ -23,7 +51,7 @@ Python 3.12 包 `axiomtrace-tools` 安装四个命令：
 | --- | --- |
 | `axiom-decoder` | 读取二进制文件、重同步 Wire 帧、校验 framing/CRC，并输出 `raw`、`text`、`json` 或 `jsonl` |
 | `axiom-codegen` | 将 JSON 或可选 YAML 事件定义生成 C 头文件、dictionary JSON、source map 与 metadata identity |
-| `axiom-bundle` | 生成和检查包含 dictionary、source map、build info 与 identity 的版本化目录 |
+| `axiom-bundle` | 生成包含 dictionary、source map、build info 与 identity 的版本化目录；使用 `axiom-validate --bundle` 进行校验 |
 | `axiom-validate` | 校验事件定义、dictionary、bundle、golden vector 与 trace |
 
 YAML 支持是可选依赖；JSON 不依赖 YAML 解析器。

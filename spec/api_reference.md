@@ -2,7 +2,7 @@
 
 # AxiomTrace API Reference
 
-> Version: v1.0.0 | Status: **Frozen**
+> Version: v1.0.0 | Status: **Stable and frozen**
 
 ---
 
@@ -244,12 +244,18 @@ Snapshots and reset are protected by the Port critical section. `axiom_init()` r
 
 ## 9. Port Layer API
 
-All port functions provide `__attribute__((weak))` default implementations. Override by providing strong symbols in your project.
+The Host generic provider supplies weak defaults where the compiler supports
+weak symbols. Architecture Port sources are selected as a complete provider,
+and vendor directories are reference-only maps; do not assume every function
+in this list is weak. For a custom target, configure `AXIOM_PORT_SOURCE=NONE`
+(the old `AXIOM_EXTERNAL_PORT=ON` is a deprecated alias), then implement the
+complete Port contract in the consuming firmware.
 
 ```c
 uint32_t axiom_port_timestamp(void);
 void     axiom_port_critical_enter(void);
 void     axiom_port_critical_exit(void);
+void     axiom_port_string_out(const char *str);
 void     axiom_port_fault_hook(uint8_t module_id, uint16_t event_id,
                                 const uint8_t *payload, uint8_t payload_len);
 uint8_t  axiom_port_reset_reason(void);
@@ -260,6 +266,9 @@ int  axiom_port_flash_erase(uint32_t addr, uint32_t len);
 int  axiom_port_flash_write(uint32_t addr, const uint8_t *data, uint32_t len);
 int  axiom_port_flash_read(uint32_t addr, uint8_t *out, uint32_t len);
 ```
+
+`axiom_port_string_out()` is used by `AX_LOG*` in `DEV` and `FIELD` profiles;
+it emits plain text and does not enter the binary Wire protocol.
 
 ---
 

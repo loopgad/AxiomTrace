@@ -14,11 +14,11 @@ import pytest
 # Add tool/src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "tool" / "src"))
 
-from axiomtrace_tools.cli import main as cli_main
+from axiomtrace_tools.cli import codegen_main, main as cli_main
 from axiomtrace_tools.bundle import generate_bundle, load_bundle
 from axiomtrace_tools.capsule import decode_capsule, render_capsule_report
 from axiomtrace_tools.codegen import generate_assets, validate_event_source
-from axiomtrace_tools.dictionary import load_dictionary
+from axiomtrace_tools.dictionary import EventDictionary, load_dictionary
 from axiomtrace_tools.decoder import (
     FRAME_SYNC,
     WIRE_VERSION_MAJOR,
@@ -29,6 +29,8 @@ from axiomtrace_tools.decoder import (
     find_dictionary,
 )
 from axiomtrace_tools.render import render_json, render_text
+from axiomtrace_tools.metadata_id import metadata_id_for_data
+from axiomtrace_tools.source_map import load_source_map, resolve_location
 from axiomtrace_tools.validator import validate_bundle, validate_golden, validate_trace_bundle
 
 
@@ -268,6 +270,32 @@ class TestDecoder:
         # Known test case: CRC of empty bytes should be 0xFFFF
         assert crc16_ccitt_false(b'') == 0xFFFF
 
+    def test_decode_stream_normalizes_plain_dictionary_once(self, monkeypatch):
+        import axiomtrace_tools.decoder as decoder_module
+
+        dictionary = {
+            "modules": [{
+                "id": 0x10,
+                "events": [{"id": 1, "args": [{"name": "value", "type": "u8"}]}],
+            }]
+        }
+        calls = 0
+        original = decoder_module.EventDictionary
+
+        class CountingDictionary(original):
+            def __init__(self, data, path=None):
+                nonlocal calls
+                calls += 1
+                super().__init__(data, path)
+
+        monkeypatch.setattr(decoder_module, "EventDictionary", CountingDictionary)
+        raw = make_frame(bytes([42]), module_id=0x10) + make_frame(bytes([43]), module_id=0x10, seq=2)
+
+        frames = decoder_module.decode_stream(raw, dictionary)
+
+        assert len(frames) == 2
+        assert calls == 1
+
 
 # =============================================================================
 # Auto-search Tests
@@ -384,6 +412,35 @@ class TestCLI:
         result = runner.invoke(test_cmd, [str(input_file), '-o', 'json'])
         assert result.exit_code == 0
         assert 'output=json' in result.output
+
+    def test_codegen_invalid_input_is_click_exception(self, tmp_path):
+        from click.testing import CliRunner
+
+        source = tmp_path / "events.json"
+        source.write_text("[]", encoding="utf-8")
+
+        result = CliRunner().invoke(codegen_main, ["--events", str(source), "--out", str(tmp_path / "out")])
+
+        assert result.exit_code != 0
+        assert "event source root must be an object" in result.output
+        assert "Traceback" not in result.output
+
+    def test_decoder_malformed_bundle_is_click_exception(self, tmp_path):
+        from click.testing import CliRunner
+
+        manifest = tmp_path / "manifest.json"
+        manifest.write_text("[]", encoding="utf-8")
+        trace = tmp_path / "trace.bin"
+        trace.write_bytes(b"")
+
+        result = CliRunner().invoke(
+            cli_main,
+            [str(trace), "--bundle", str(manifest), "--format", "json"],
+        )
+
+        assert result.exit_code != 0
+        assert "bundle manifest root must be an object" in result.output
+        assert "Traceback" not in result.output
 
 
 class TestToolchain:
@@ -544,7 +601,12 @@ class TestToolchain:
         source.write_text(json.dumps(sample_events_source), encoding="utf-8")
         generate_bundle(source, bundle_dir)
         bundle = load_bundle(bundle_dir)
-        report = decode_capsule(make_capsule(identity_frame(bundle.metadata_id) + make_frame(bytes([42]))))
+        report = decode_capsule(
+            make_capsule(
+                identity_frame(bundle.metadata_id) + make_frame(bytes([42])),
+                post_window_count=2,
+            )
+        )
 
         rendered = json.loads(
             render_capsule_report(
@@ -564,8 +626,9 @@ class TestToolchain:
 
     def test_capsule_decode_matches_firmware_header_layout(self):
         snapshot = struct.pack("<IIII", 0x1000, 0x2000, 0x3000, 0x4000)
+        frames = b"".join(make_frame(bytes([42]), seq=index) for index in range(1, 6))
         capsule = make_capsule(
-            make_frame(bytes([42])),
+            frames,
             firmware_hash=b"\xAA\xBB\xCC\xDD",
             reset_reason=7,
             fault_type=0x44,
@@ -586,7 +649,7 @@ class TestToolchain:
         assert report["post_window_count"] == 2
         assert report["snapshot"]["pc"] == 0x1000
         assert report["snapshot"]["lr"] == 0x2000
-        assert len(report["frames"]) == 1
+        assert len(report["frames"]) == 5
 
     def test_capsule_decode_rejects_corrupt_or_truncated_images(self):
         valid = bytearray(make_capsule(make_frame(bytes([42]))))
@@ -597,6 +660,21 @@ class TestToolchain:
             decode_capsule(bytes(corrupt))
         with pytest.raises(ValueError, match="truncated"):
             decode_capsule(bytes(valid[:12]))
+
+    @pytest.mark.parametrize(
+        "frames, pre_count, post_count, message",
+        [
+            (make_frame(bytes([42])), 0, 0, "frame count mismatch"),
+            (make_frame(bytes([42]), major=1), 0, 1, "wire version"),
+            (make_frame(bytes([42]), major=3), 0, 1, "decode error"),
+            (make_frame(bytes([42])) + b"junk", 0, 1, "non-frame data"),
+        ],
+    )
+    def test_capsule_rejects_invalid_frame_window(self, frames, pre_count, post_count, message):
+        capsule = make_capsule(frames, pre_window_count=pre_count, post_window_count=post_count)
+
+        with pytest.raises(ValueError, match=message):
+            decode_capsule(capsule)
 
     def test_codegen_accounts_for_location_metadata_overhead(self):
         args = [{"name": f"a{idx}", "type": "u32"} for idx in range(31)]
@@ -617,6 +695,126 @@ class TestToolchain:
         validate_event_source(source, location_mode="none")
         with pytest.raises(ValueError, match="payload exceeds"):
             validate_event_source(source, location_mode="file_id")
+
+    def test_metadata_identity_ignores_derived_source_indexes(self):
+        source_map = {
+            "schema": "axiomtrace.source_map.v1",
+            "location_mode": "hash",
+            "files": {"1": {"path": "src/a.c", "hash16": "0x1234"}},
+            "hash_index": {"0X1234": ["1"]},
+            "hash_collisions": {},
+            "functions": [],
+        }
+        without_indexes = {
+            key: value
+            for key, value in source_map.items()
+            if key not in {"hash_index", "hash_collisions"}
+        }
+
+        assert metadata_id_for_data({}, source_map, {"mode": "hash"}) == metadata_id_for_data(
+            {}, without_indexes, {"mode": "hash"}
+        )
+
+    @pytest.mark.parametrize(
+        "source",
+        [
+            {"modules": [{"id": 1, "name": "M", "events": [{"id": 1, "name": "E", "args": 0}]}]},
+            {"modules": [{"id": 1, "name": "M", "events": [{"id": 1, "name": "E", "text": 1}]}]},
+        ],
+    )
+    def test_event_source_rejects_scalar_args_and_text(self, source):
+        with pytest.raises(ValueError):
+            validate_event_source(source)
+
+    def test_dictionary_rejects_non_string_description(self):
+        with pytest.raises(ValueError, match="description"):
+            EventDictionary({"events": {"1:1": {"description": 42}}})
+
+    def test_dictionary_rejects_null_args(self):
+        with pytest.raises(ValueError, match="args"):
+            EventDictionary({"events": {"1:1": {"args": None}}})
+
+    def test_bundle_rejects_non_object_manifest(self, tmp_path):
+        manifest = tmp_path / "manifest.json"
+        manifest.write_text("[]", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="manifest root"):
+            load_bundle(manifest)
+
+    def test_source_map_rejects_malformed_json_containers(self, tmp_path):
+        source_map_path = tmp_path / "source_map.json"
+        source_map_path.write_text("[]", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="source map root"):
+            load_source_map(source_map_path)
+        with pytest.raises(ValueError, match="source map files"):
+            resolve_location({"mode": "file_id", "file_id": 1}, {"files": []})
+
+    @pytest.mark.parametrize(
+        "source",
+        [
+            [],
+            {"dictionary": {"modules": [{"id": 1, "name": "TEST", "events": [None]}]}},
+        ],
+    )
+    def test_event_source_rejects_non_object_structure(self, source):
+        with pytest.raises(ValueError):
+            validate_event_source(source)
+
+    def test_dictionary_rejects_invalid_argument_structure(self, tmp_path):
+        path = tmp_path / "dictionary.json"
+        path.write_text(
+            json.dumps({"modules": {"1": {"events": {"1": {"args": [None]}}}}}),
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="argument"):
+            load_dictionary(path)
+
+    def test_golden_requires_expected_output(self, tmp_path, valid_frame):
+        frames_dir = tmp_path / "frames"
+        frames_dir.mkdir()
+        (frames_dir / "missing.bin").write_bytes(valid_frame)
+
+        with pytest.raises(ValueError, match="expected output missing"):
+            validate_golden(frames_dir)
+
+    def test_source_map_reports_ambiguous_hash(self):
+        source_map = {
+            "files": {
+                "1": {"path": "src/a.c", "hash16": "0x1234"},
+                "2": {"path": "src/b.c", "hash16": "0x1234"},
+            },
+            "hash_index": {"0X1234": ["1", "2"]},
+        }
+
+        resolved = resolve_location(
+            {"mode": "hash", "file_hash": 0x1234, "line": 7, "function_hash": 0},
+            source_map,
+        )
+
+        assert resolved["warning"] == "AMBIGUOUS_FILE_HASH"
+        assert resolved["candidates"] == ["src/a.c", "src/b.c"]
+
+    def test_capsule_rejects_unknown_version_and_preserves_unknown_snapshot(self):
+        valid = bytearray(
+            make_capsule(make_frame(bytes([42])), snapshot_id=0x7F, snapshot=b"\xDE\xAD")
+        )
+        unknown_version = bytearray(valid)
+        unknown_version[4] = 2
+        struct.pack_into(
+            "<I",
+            unknown_version,
+            len(unknown_version) - 4,
+            binascii.crc32(unknown_version[:-4]) & 0xFFFFFFFF,
+        )
+
+        with pytest.raises(ValueError, match="unsupported capsule version"):
+            decode_capsule(bytes(unknown_version))
+
+        report = decode_capsule(bytes(valid))
+        assert report["snapshot"]["unsupported"] is True
+        assert report["snapshot"]["raw_hex"] == "dead"
 
     @pytest.mark.skipif(
         shutil.which("cmake") is None or shutil.which("ninja") is None,

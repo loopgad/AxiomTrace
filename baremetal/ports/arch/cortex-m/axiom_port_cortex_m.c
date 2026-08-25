@@ -1,5 +1,11 @@
 #include "axiom_port.h"
 
+/* The port contract is microseconds, while DWT_CYCCNT is CPU cycles.
+ * Define AXIOM_CPU_HZ to the actual core clock for a usable timestamp. */
+#ifndef AXIOM_CPU_HZ
+#define AXIOM_CPU_HZ 0u
+#endif
+
 /* ============================================================================
  * Cortex-M Architecture Port
  * ============================================================================
@@ -22,39 +28,60 @@
 static volatile uint32_t * const DWT_CTRL = (uint32_t *)0xE0001000;
 static volatile uint32_t * const DWT_CYCCNT = (uint32_t *)0xE0001004;
 static volatile uint32_t * const SCB_DEMCR = (uint32_t *)0xE000EDFC;
+
+static uint32_t axiom_port_cycles_to_us(uint32_t cycles) {
+#if AXIOM_CPU_HZ > 0u
+    return (uint32_t)(((uint64_t)cycles * 1000000ull) /
+                      (uint64_t)AXIOM_CPU_HZ);
+#else
+    /* No honest cycle-to-time conversion is possible without the clock. */
+    (void)cycles;
+    return 0u;
+#endif
+}
 #endif
 
 uint32_t axiom_port_timestamp(void) {
 #if CORTEX_M_HAS_DWT
     /* 确保 DWT_CYCCNT 已启用 */
-    if ((*DWT_CTRL) == 0) {
+    if ((*DWT_CTRL & 0x1u) == 0u) {
         /* 启用 trace, 先解锁 DWT */
-        *SCB_DEMCR = 0x01000000;  /* TRCENA bit */
-        *DWT_CTRL = 0x40000001;   /* CYCCNTENA bit */
+        *SCB_DEMCR |= 0x01000000u;  /* TRCENA bit */
+        *DWT_CTRL |= 0x1u;          /* CYCCNTENA bit */
     }
-    return (uint32_t)*DWT_CYCCNT;
+    return axiom_port_cycles_to_us((uint32_t)*DWT_CYCCNT);
 #else
     /* 降级方案: 使用 SysTick 或返回 0 */
     return 0u;
 #endif
 }
 
-void axiom_port_critical_enter(void) {
-    /* 方法1: 使用 PRIMASK (最简单, 禁用所有中断) */
-    __asm volatile ("cpsid i" : : : "memory");
+static uint32_t g_critical_nesting;
+static uint32_t g_saved_primask;
 
-    /* 方法2: 使用 BASEPRI (可选, 保留高优先级中断)
-     * 适用于需要保留 NMI 或 HardFault 的场景
-     * __asm volatile ("msr basepri, %0" : : "r" (0x10) : "memory");
-     */
+void axiom_port_critical_enter(void) {
+    uint32_t primask;
+    /* Keep the read and mask operation together so the saved state belongs to
+     * the outermost critical section. */
+    __asm volatile (
+        "mrs %0, primask\n"
+        "cpsid i"
+        : "=r"(primask)
+        :
+        : "memory");
+    if (g_critical_nesting == 0u) {
+        g_saved_primask = primask;
+    }
+    g_critical_nesting++;
 }
 
 void axiom_port_critical_exit(void) {
-    __asm volatile ("cpsie i" : : : "memory");
-
-    /* 对应 BASEPRI 方法:
-     * __asm volatile ("msr basepri, %0" : : "r" (0) : "memory");
-     */
+    if (g_critical_nesting > 0u) {
+        g_critical_nesting--;
+        if (g_critical_nesting == 0u) {
+            __asm volatile ("msr primask, %0" : : "r"(g_saved_primask) : "memory");
+        }
+    }
 }
 
 void axiom_port_string_out(const char *str) {

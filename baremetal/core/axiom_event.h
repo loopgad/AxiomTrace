@@ -95,6 +95,19 @@ typedef enum {
 #define AXIOM_WIRE_VERSION_MINOR 0u
 #define AXIOM_WIRE_VERSION ((uint8_t)((AXIOM_WIRE_VERSION_MAJOR << 4u) | AXIOM_WIRE_VERSION_MINOR))
 
+/* Reserved system event identifiers shared by Core and Frontend. */
+#define AXIOM_SYSTEM_MODULE_ID          0x00u
+#define AXIOM_SYSTEM_EVENT_PROBE        0x0000u
+#define AXIOM_SYSTEM_EVENT_DROP_SUMMARY 0x0001u
+#define AXIOM_SYSTEM_EVENT_METADATA_ID  0x0002u
+
+/* Core emission lifecycle, shared with the frontend macros. */
+void axiom_write(axiom_level_t level, uint8_t module_id, uint16_t event_id,
+                 const uint8_t *payload, uint8_t payload_len);
+void axiom_init(void);
+void axiom_flush(void);
+void axiom_internal_record_encode_drop(uint8_t module_id, uint16_t event_id);
+
 /* ---------------------------------------------------------------------------
  * Frame layout constants
  * --------------------------------------------------------------------------- */

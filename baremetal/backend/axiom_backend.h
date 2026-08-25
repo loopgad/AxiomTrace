@@ -79,10 +79,11 @@ typedef enum {
  * prevents a broken UART/USB from blocking other backends indefinitely.
  * Auto-recovery is attempted during axiom_backend_dispatch().
  *
- * Enable via AXIOM_BACKEND_DEGRADATION=1 (default).
+ * Enable explicitly via AXIOM_BACKEND_DEGRADATION=1 when the selected Port
+ * provides a monotonic microsecond timestamp.
  * --------------------------------------------------------------------------- */
 #ifndef AXIOM_BACKEND_DEGRADATION
-#define AXIOM_BACKEND_DEGRADATION 1
+#define AXIOM_BACKEND_DEGRADATION 0
 #endif
 
 #if AXIOM_BACKEND_DEGRADATION

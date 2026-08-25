@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import wraps
 from pathlib import Path
 
 import click
@@ -43,6 +44,20 @@ def echo_error(msg: str, err: bool = False):
     click.secho(f"# ERROR: {msg}", fg="red", bold=True, err=err)
 
 
+def _click_error_boundary(function):
+    """Convert user-provided file and metadata errors to stable CLI errors."""
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except click.ClickException:
+            raise
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    return wrapped
+
+
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("input", type=click.File("rb"))
 @click.option("--dictionary", "-d", type=click.Path(exists=True, dir_okay=False), default=None,
@@ -57,6 +72,7 @@ def echo_error(msg: str, err: bool = False):
               help="Output format compatibility alias.")
 @click.option("--output-file", type=click.Path(dir_okay=False), default=None,
               help="Write rendered output to a file instead of stdout.")
+@_click_error_boundary
 def decoder_main(input, dictionary, bundle, bundle_store, output_format, legacy_output, output_file):
     """AxiomTrace binary frame decoder."""
     selected_format = output_format or legacy_output or "text"
@@ -146,6 +162,7 @@ def _render(frames, output_format, dictionary, metadata_id, source_map):
 @click.option("--location-function", is_flag=True,
               help="Include function hashes in hash-mode metadata identity.")
 @click.option("--check", is_flag=True, help="Validate only; do not write generated files.")
+@_click_error_boundary
 def codegen_main(events, out, source_id_map, location_mode, location_function, check):
     """Generate C headers and dictionary.json from event definitions."""
     generated = generate_assets(
@@ -187,6 +204,7 @@ def bundle_main():
               help="Location mode; inferred from sources when omitted.")
 @click.option("--location-function", is_flag=True,
               help="Include function hashes in hash-mode metadata identity.")
+@_click_error_boundary
 def bundle_generate(
     events, elf, map_file, compile_db, source_id_map, out, firmware_name, firmware_version,
     location_mode, location_function,
@@ -219,6 +237,7 @@ def bundle_generate(
               help="Golden directory containing frames and expected raw JSON.")
 @click.option("--trace", type=click.Path(exists=True, dir_okay=False), default=None,
               help="Trace to validate against --bundle metadata identity and payload schema.")
+@_click_error_boundary
 def validate_main(bundle, dictionary, events, golden, trace):
     """Validate event metadata and bundle wiring."""
     try:

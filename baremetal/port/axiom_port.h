@@ -14,7 +14,9 @@ extern "C" {
  * Default weak implementations are in axiom_port_generic.c.
  * --------------------------------------------------------------------------- */
 
-/* Monotonic timestamp in microseconds (wraps naturally) */
+/* Monotonic timestamp in microseconds. The uint32_t value wraps naturally;
+ * ports without a configured time source may return zero, and callers must
+ * not enable time-based policies unless that source is available. */
 extern uint32_t axiom_port_timestamp(void);
 
 #if defined(AXIOM_HOST_TESTING)
@@ -22,7 +24,8 @@ extern uint32_t axiom_port_timestamp(void);
 extern uint32_t g_axiom_port_simulated_time;
 #endif
 
-/* Critical section: must be nestable or simply disable/enable IRQs */
+/* Critical section: calls may nest. The outermost exit must restore the
+ * interrupt mask that was active before the matching outermost enter. */
 extern void axiom_port_critical_enter(void);
 extern void axiom_port_critical_exit(void);
 

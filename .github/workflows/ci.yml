@@ -20,6 +20,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install clang-tidy
+        if: matrix.compiler == 'clang'
+        run: sudo apt-get update && sudo apt-get install -y clang-tidy
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja
@@ -27,9 +30,23 @@ jobs:
           -DAXIOM_BUILD_TESTS=ON
           -DAXIOM_BUILD_EXAMPLES=ON
           -DAXIOM_SELFTEST=ON
+          -DAXIOM_ENABLE_CLANG_TIDY=OFF
           -DCMAKE_C_COMPILER=${{ matrix.compiler }}
       - run: cmake --build build --parallel
       - run: ctest --test-dir build --output-on-failure
+      - name: Configure clang-tidy core gate
+        if: matrix.compiler == 'clang'
+        run: >
+          cmake -S . -B build-clang-tidy -G Ninja
+          -DAXIOM_PLATFORM=host
+          -DAXIOM_BUILD_TESTS=OFF
+          -DAXIOM_BUILD_BENCHMARKS=OFF
+          -DAXIOM_BUILD_EXAMPLES=OFF
+          -DAXIOM_ENABLE_CLANG_TIDY=ON
+          -DCMAKE_C_COMPILER=clang
+      - name: Build clang-tidy core gate
+        if: matrix.compiler == 'clang'
+        run: cmake --build build-clang-tidy --parallel
 
   sanitizers:
     name: ASan + UBSan
@@ -70,13 +87,15 @@ jobs:
         run: |
           cmake -S . -B build-benchmark -G Ninja \
             -DAXIOM_PLATFORM=host -DAXIOM_BUILD_TESTS=ON \
-            -DAXIOM_BUILD_EXAMPLES=OFF -DCMAKE_C_COMPILER=clang
+            -DAXIOM_BUILD_BENCHMARKS=ON -DAXIOM_BUILD_EXAMPLES=OFF \
+            -DCMAKE_C_COMPILER=clang
           cmake --build build-benchmark --target test_benchmark --parallel
       - name: Build baseline benchmark
         run: |
           git worktree add --detach ../axiomtrace-baseline "${{ steps.baseline.outputs.sha }}"
           cmake -S ../axiomtrace-baseline -B ../axiomtrace-baseline-build -G Ninja \
             -DAXIOM_PLATFORM=host -DAXIOM_BUILD_TESTS=ON \
+            -DAXIOM_BUILD_BENCHMARKS=ON \
             -DAXIOM_BUILD_EXAMPLES=OFF -DCMAKE_C_COMPILER=clang
           cmake --build ../axiomtrace-baseline-build --target test_benchmark --parallel
       - name: Enforce P99.9 regression limit
@@ -98,13 +117,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: python -m pip install -e "./tool[test]"
-      - run: python -m pytest -q
-      - run: python -m compileall -q tool/src tests
-      - run: python tool/golden/update_golden.py --check
-      - run: axiom-validate --golden tool/golden
-      - run: python scripts/release_checks.py
+          python-version-file: tool/.python-version
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --project tool --extra test --locked
+      - run: uv run --project tool --extra test python -m pytest -q
+      - run: uv run --project tool --extra test python -m compileall -q tool/src tests
+      - run: uv run --project tool --extra test python tool/golden/update_golden.py --check
+      - run: uv run --project tool --extra test axiom-validate --golden tool/golden
+      - run: uv run --project tool --extra test python scripts/release_checks.py
 
   cross-compile:
     name: GNU reference compile + resources
@@ -154,6 +174,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Read project version
+        id: project-version
+        shell: bash
+        run: |
+          version="$(python -c 'import re,sys; from pathlib import Path; text=Path("CMakeLists.txt").read_text(encoding="utf-8"); match=re.search(r"project\(AxiomTrace VERSION ([0-9.]+)", text); sys.exit("project version not found") if match is None else print(match.group(1))')"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
       - run: python tool/scripts/amalgamate.py
       - name: GNU11 implementation smoke
         run: |
@@ -170,5 +196,5 @@ jobs:
           /tmp/axiomtrace-smoke
       - uses: actions/upload-artifact@v4
         with:
-          name: axiomtrace-1.0.0-single-header
+          name: axiomtrace-${{ steps.project-version.outputs.version }}-single-header
           path: dist/axiomtrace.h

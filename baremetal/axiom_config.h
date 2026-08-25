@@ -129,6 +129,9 @@
     #ifndef AXIOM_CFG_TIME_SYNC_ENABLED
     #define AXIOM_CFG_TIME_SYNC_ENABLED 0
     #endif
+    #ifndef AXIOM_BACKEND_DEGRADATION
+    #define AXIOM_BACKEND_DEGRADATION 0
+    #endif
     #ifndef AXIOM_CAPSULE_ENABLED
     #define AXIOM_CAPSULE_ENABLED 0
     #endif
@@ -151,9 +154,15 @@
     #ifndef AXIOM_CAPSULE_RING_SIZE
     #define AXIOM_CAPSULE_RING_SIZE 2048u
     #endif
+    #ifndef AXIOM_BACKEND_DEGRADATION
+    #define AXIOM_BACKEND_DEGRADATION 0
+    #endif
 #elif AXIOM_PRESET == AXIOM_PRESET_DEV
     #ifndef AXIOM_PROFILE
     #define AXIOM_PROFILE AXIOM_PROFILE_DEV
+    #endif
+    #ifndef AXIOM_BACKEND_DEGRADATION
+    #define AXIOM_BACKEND_DEGRADATION 0
     #endif
 #endif
 
@@ -263,7 +272,7 @@
  * Panic path always bypasses degradation.
  * --------------------------------------------------------------------------- */
 #ifndef AXIOM_BACKEND_DEGRADATION
-#define AXIOM_BACKEND_DEGRADATION 1
+#define AXIOM_BACKEND_DEGRADATION 0
 #endif
 
 #if AXIOM_BACKEND_DEGRADATION

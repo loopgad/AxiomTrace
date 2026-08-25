@@ -41,7 +41,7 @@
 - [x] 冻结 binary frame 字段顺序与大小。
 - [x] 生成首批 golden frames（覆盖 packed schema、metadata suffix 与边界 payload）。
 - [x] 编写 `expected.json`（decoder 期望输出）。
-- [x] Python decoder `../../tool/decoder/axiom_decoder.py`（解析 header/payload/crc）。
+- [x] 已安装的 `axiom-decoder` 命令（解析 header/payload/crc）；旧版 `tool/decoder/axiom_decoder.py` 仅保留兼容用途。
 - [x] decoder 非法帧以结构化错误显式拒绝且不崩溃。
 - [x] `../../tool/golden/update_golden.py`（encoder 生成 bin + expected.json）。
 - [x] Host regression test：`tests/test_python_tools.py` 对 golden frames 全量比对。
@@ -65,12 +65,13 @@
 - [x] `AX_KV(level, mod, evt, "k", v, ...)` 宏实现（轻量键值对）。
 - [x] `DEV / FIELD / PROD` Profile 编译期裁切宏。
 - [x] `axiom_frontend.h` 统一入口（自动包含所有 Frontend 宏）。
-- [x] Example：`example_minimal.c`（3 行代码起步）。
+- [x] Example：`example_minimal.c`（完整 Host 路径，以 hex 输出一帧）。
+- [x] Example：`example_custom_port.c`（面向集成方、可编译的 Port + Backend callback skeleton）。
 - [x] Example：`example_full.c`（多 API 组合 + filter + backend）。
 - [x] Host tests：各 Profile 下宏展开行为验证。
 
 **验收标准**：
-- `example_minimal.c` 注册公开 Memory Backend、发事件、调用 `axiom_flush()`，并在 Host GCC/Clang 下输出经过 decoder 验证的帧。
+- `example_minimal.c` 注册公开 Memory Backend、发事件、调用 `axiom_flush()`，并在 Host GCC/Clang 下输出完整 hex 帧；按文档转为 `trace.bin` 后再通过 decoder。
 - `PROD` profile 下 `AX_LOG` / `AX_PROBE` 编译为空，不产生代码/数据。
 - 所有 Frontend API 最终调用同一个 `axiom_write()`。
 
@@ -89,7 +90,7 @@
 - [x] Host tests：`test_backend_ext.c` 与 `test_dynamic_call_chain.c`（注册、dispatch、drop、busy backend、降级、恢复、panic_write）。
 
 **验收标准**：
-- 新增一个 backend 只需：实现 3 个函数 + 调用 `axiom_backend_register()`，不修改 `core/`。
+- 新增一个 backend 只需：实现必需的 `write` callback，以及传输所需的有界 `ready`/`flush`/`panic_write`/`on_drop` callback，再调用 `axiom_backend_register()`，不修改 `core/`。
 - backend busy 时返回 `-EAGAIN`，Core 正确累计 drop counter。
 - Memory 与 Deferred 实现从主 target 链接，并通过 Host 测试。
 

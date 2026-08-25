@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from axiomtrace_tools.dictionary import TYPE_TAG_BY_NAME, WIRE_SIZE_BY_NAME, parse_int
+from axiomtrace_tools.dictionary import TYPE_TAG_BY_NAME, VALID_LEVELS, WIRE_SIZE_BY_NAME, parse_int
 from axiomtrace_tools.metadata_id import location_contract, metadata_id_for_data
 from axiomtrace_tools.source_map import generate_source_map
 
@@ -18,11 +18,23 @@ def load_event_source(path: str | Path) -> dict[str, Any]:
     text = source_path.read_text(encoding="utf-8")
     suffix = source_path.suffix.lower()
     if suffix == ".json":
-        return json.loads(text)
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid event source JSON: {path}: {exc.msg}") from exc
+        if not isinstance(data, dict):
+            raise ValueError(f"event source root must be an object: {path}")
+        return data
     if suffix in (".yaml", ".yml"):
         try:
             import yaml
-            return yaml.safe_load(text) or {}
+            try:
+                data = yaml.safe_load(text) or {}
+            except yaml.YAMLError as exc:
+                raise ValueError(f"invalid event source YAML: {path}: {exc}") from exc
+            if not isinstance(data, dict):
+                raise ValueError(f"event source root must be an object: {path}")
+            return data
         except ImportError as exc:
             raise RuntimeError(
                 "Detected YAML format dictionary. Please install PyYAML by running 'pip install pyyaml' "
@@ -33,19 +45,38 @@ def load_event_source(path: str | Path) -> dict[str, Any]:
 
 def normalize_event_source(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Normalize supported event-source schemas to a module list."""
+    if not isinstance(data, dict):
+        raise ValueError("event source root must be an object")
     dictionary = data.get("dictionary", data)
-    modules = dictionary.get("modules", []) if isinstance(dictionary, dict) else []
+    if not isinstance(dictionary, dict):
+        raise ValueError("event source dictionary must be an object")
+    modules = dictionary.get("modules", [])
     if isinstance(modules, dict):
         normalized = []
         for module_key, module in modules.items():
+            if not isinstance(module, dict):
+                raise ValueError(f"module {module_key!r} must be an object")
             module = dict(module)
             module.setdefault("id", module_key)
             events = module.get("events", {})
             if isinstance(events, dict):
-                module["events"] = [dict(event, id=event.get("id", event_key)) for event_key, event in events.items()]
+                normalized_events = []
+                for event_key, event in events.items():
+                    if not isinstance(event, dict):
+                        raise ValueError(f"event {event_key!r} in module {module_key!r} must be an object")
+                    normalized_event = dict(event)
+                    normalized_event.setdefault("id", event_key)
+                    normalized_events.append(normalized_event)
+                module["events"] = normalized_events
+            elif not isinstance(events, list):
+                raise ValueError(f"events in module {module_key!r} must be an object or array")
             normalized.append(module)
         modules = normalized
-    return [module for module in modules if isinstance(module, dict)]
+    if not isinstance(modules, list):
+        raise ValueError("event source modules must be an object or array")
+    if any(not isinstance(module, dict) for module in modules):
+        raise ValueError("every event source module must be an object")
+    return modules
 
 
 def validate_event_source(
@@ -62,7 +93,10 @@ def validate_event_source(
     seen_module_names: set[str] = set()
     seen_pairs: set[tuple[int, int]] = set()
     for module in modules:
-        module_id = parse_int(module.get("id"))
+        try:
+            module_id = parse_int(module.get("id"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"module id must be an integer: {module.get('id')!r}") from exc
         if not 0 <= module_id <= 0xFF:
             raise ValueError(f"module id out of range: {module_id}")
         if module_id in seen_modules:
@@ -73,6 +107,12 @@ def validate_event_source(
         module_name = str(module["name"])
         if not re.fullmatch(r"[A-Z][A-Z0-9_]{0,31}", module_name):
             raise ValueError(f"invalid module name: {module_name}")
+        if (
+            "description" in module
+            and module["description"] is not None
+            and not isinstance(module["description"], str)
+        ):
+            raise ValueError(f"description for {module_name} must be a string")
         if module_name in seen_module_names:
             raise ValueError(f"duplicate module name: {module_name}")
         seen_module_names.add(module_name)
@@ -82,7 +122,12 @@ def validate_event_source(
         if not isinstance(events, list) or not events:
             raise ValueError(f"module {module['name']} must define at least one event")
         for event in events:
-            event_id = parse_int(event.get("id"))
+            if not isinstance(event, dict):
+                raise ValueError(f"events in {module_name} must be objects")
+            try:
+                event_id = parse_int(event.get("id"))
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"event id in {module_name} must be an integer: {event.get('id')!r}") from exc
             if not 0 <= event_id <= 0xFFFF:
                 raise ValueError(f"event id out of range: {event_id}")
             if event_id in seen_events:
@@ -100,8 +145,23 @@ def validate_event_source(
             if event_name in seen_event_names:
                 raise ValueError(f"duplicate event name in {module_name}: {event_name}")
             seen_event_names.add(event_name)
-            placeholders = re.findall(r"\{([A-Za-z_][A-Za-z0-9_]*):([A-Za-z0-9_]+)\}", str(event.get("text", "")))
-            args = event.get("args", []) or []
+            if (
+                "description" in event
+                and event["description"] is not None
+                and not isinstance(event["description"], str)
+            ):
+                raise ValueError(f"description for {module_name}.{event_name} must be a string")
+            if "text" in event and not isinstance(event["text"], str):
+                raise ValueError(f"text for {module_name}.{event_name} must be a string")
+            placeholders = re.findall(r"\{([A-Za-z_][A-Za-z0-9_]*):([A-Za-z0-9_]+)\}", event.get("text", ""))
+            args = event.get("args", [])
+            if not isinstance(args, list):
+                raise ValueError(f"args for {module_name}.{event_name} must be an array")
+            if any(not isinstance(arg, dict) for arg in args):
+                raise ValueError(f"args for {module_name}.{event_name} must contain objects")
+            for index, arg in enumerate(args):
+                if "name" not in arg or not isinstance(arg["name"], str):
+                    raise ValueError(f"argument {index} for {module_name}.{event_name} must have a string name")
             expected = [(str(arg.get("name")), str(arg.get("type"))) for arg in args]
             if placeholders != expected:
                 raise ValueError(f"placeholder/args mismatch for {module_name}.{event_name}")
@@ -109,6 +169,9 @@ def validate_event_source(
                 arg_type = arg.get("type")
                 if arg_type not in TYPE_TAG_BY_NAME:
                     raise ValueError(f"unsupported arg type for {module['name']}.{event['name']}: {arg_type}")
+            level = str(event.get("level", "INFO")).upper()
+            if level not in VALID_LEVELS:
+                raise ValueError(f"invalid event level for {module_name}.{event_name}: {level}")
             metadata_overhead = {"none": 0, "file_id": 6, "hash": 8}.get(location_mode)
             if metadata_overhead is None:
                 raise ValueError(f"unsupported location mode: {location_mode}")

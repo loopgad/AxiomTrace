@@ -2,7 +2,7 @@
 
 # AxiomTrace API 参考手册
 
-> 版本：v1.0.0 | 状态：**已冻结**
+> 版本：v1.0.0 | 状态：**稳定且已冻结**
 
 ---
 
@@ -244,7 +244,11 @@ void axiom_diagnostics_reset(void);
 
 ## 9. Port 层 API
 
-所有 Port 层函数都提供 `__attribute__((weak))` 默认实现。通过在项目中提供强符号来覆盖它们。
+Host generic provider 会在编译器支持 weak 符号时提供弱默认实现。架构 Port
+源码按完整 provider 选择，厂商目录也只是 reference map；不要假定下面每个
+函数都是 weak。自定义目标请配置 `AXIOM_PORT_SOURCE=NONE`（旧的
+`AXIOM_EXTERNAL_PORT=ON` 是已弃用的兼容别名），并在消费方固件中实现完整
+Port 契约。
 
 ```c
 uint32_t axiom_port_timestamp(void);
@@ -261,6 +265,9 @@ int  axiom_port_flash_erase(uint32_t addr, uint32_t len);
 int  axiom_port_flash_write(uint32_t addr, const uint8_t *data, uint32_t len);
 int  axiom_port_flash_read(uint32_t addr, uint8_t *out, uint32_t len);
 ```
+
+`axiom_port_string_out()` 由 `DEV` 和 `FIELD` Profile 中的 `AX_LOG*` 使用；
+它输出普通文本，不进入二进制 Wire 协议。
 
 ---
 

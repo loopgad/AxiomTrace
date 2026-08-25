@@ -373,11 +373,18 @@ def decode_stream(
     dictionary: EventDictionary | dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Decode frames from a raw stream, recovering at the next sync byte."""
+    normalized_dictionary = (
+        dictionary
+        if isinstance(dictionary, EventDictionary)
+        else EventDictionary(dictionary)
+        if dictionary is not None
+        else None
+    )
     frames: list[dict[str, Any]] = []
     elapsed = 0
     offset = 0
     while offset < len(raw):
-        frame, next_offset = decode_frame(raw, offset, dictionary)
+        frame, next_offset = decode_frame(raw, offset, normalized_dictionary)
         if frame is None:
             break
         if "error" not in frame:

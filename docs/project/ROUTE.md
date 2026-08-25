@@ -41,7 +41,7 @@
 - [x] Frozen binary frame field order and size.
 - [x] Generate first batch of golden frames (covering packed schemas, metadata suffixes, and boundary payloads).
 - [x] Write `expected.json` (expected output for decoder).
-- [x] Python decoder `../../tool/decoder/axiom_decoder.py` (parsing header/payload/crc).
+- [x] Installed `axiom-decoder` command (parsing header/payload/crc); the legacy `tool/decoder/axiom_decoder.py` remains compatibility-only.
 - [x] Decoder explicitly rejects invalid frames with structured errors and no crash.
 - [x] `../../tool/golden/update_golden.py` (encoder generates bin + expected.json).
 - [x] Host regression test: `tests/test_python_tools.py` full comparison against golden frames.
@@ -65,12 +65,13 @@
 - [x] `AX_KV(level, mod, evt, "k", v, ...)` macro implementation (lightweight KV pairs).
 - [x] `DEV / FIELD / PROD` Profile compile-time pruning macros.
 - [x] `axiom_frontend.h` unified entry (auto-includes all Frontend macros).
-- [x] Example: `example_minimal.c` (start with 3 lines of code).
+- [x] Example: `example_minimal.c` (small complete Host path; prints one frame as hex).
+- [x] Example: `example_custom_port.c` (compile-checked Port + Backend callback skeleton for integrators).
 - [x] Example: `example_full.c` (multi-API combo + filter + backend).
 - [x] Host tests: Macro expansion behavior verification under each Profile.
 
 **Acceptance Criteria**:
-- `example_minimal.c` registers the public Memory Backend, emits, calls `axiom_flush()`, and outputs a decoder-validated frame on host GCC/Clang.
+- `example_minimal.c` registers the public Memory Backend, emits, calls `axiom_flush()`, and outputs a complete frame as hex on host GCC/Clang; the documented hex-to-`trace.bin` conversion then passes the decoder.
 - `AX_LOG` / `AX_PROBE` compile to nothing in `PROD` profile, no code/data generated.
 - All Frontend APIs eventually call the same `axiom_write()`.
 
@@ -89,7 +90,7 @@
 - [x] Host tests: `test_backend_ext.c` and `test_dynamic_call_chain.c` (registration, dispatch, drop, busy backend, degradation, recovery, panic_write).
 
 **Acceptance Criteria**:
-- Adding a new backend only requires: implementing 3 functions + calling `axiom_backend_register()`, no changes to `core/`.
+- Adding a new backend only requires: implementing the required `write` callback (and any bounded `ready`/`flush`/`panic_write`/`on_drop` callbacks needed by the transport) plus calling `axiom_backend_register()`, with no changes to `core/`.
 - Backend returns `-EAGAIN` when busy; Core correctly increments drop counter.
 - Memory and Deferred implementations link from the main target and pass Host tests.
 

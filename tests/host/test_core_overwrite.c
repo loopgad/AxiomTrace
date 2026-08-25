@@ -4,6 +4,7 @@
 #include "axiom_frame.h"
 #include "axiom_frontend.h"
 #include "axiom_backend.h"
+#include "axiom_ring.h"
 
 static void test_complete_frame_overwrite(void) {
     uint8_t capture[2048] = {0};
@@ -40,8 +41,35 @@ static void test_complete_frame_overwrite(void) {
     CHECK("overwrite: no partial trailing bytes", offset == memory_context.head);
 }
 
+static void test_peek_consume_snapshot(void) {
+    uint8_t storage[8] = {0u};
+    uint8_t first[] = {1u, 2u, 3u, 4u};
+    uint8_t overwrite[] = {5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u};
+    uint8_t out[4] = {0u};
+    uint32_t tail_snapshot = 0u;
+    axiom_ring_t ring;
+
+    axiom_ring_init(&ring, storage, sizeof(storage));
+    CHECK("snapshot: initial write", axiom_ring_write(&ring, first, sizeof(first)));
+    CHECK("snapshot: peek succeeds",
+          axiom_ring_peek_snapshot(&ring, out, sizeof(out), &tail_snapshot) == sizeof(out));
+    CHECK("snapshot: bytes copied", out[0] == 1u && out[3] == 4u);
+
+    CHECK("snapshot: overwrite write", axiom_ring_write(&ring, overwrite, sizeof(overwrite)));
+    CHECK("snapshot: stale consume rejected",
+          !axiom_ring_consume_if(&ring, tail_snapshot, sizeof(out)));
+    CHECK("snapshot: current tail preserved", ring.tail == sizeof(first));
+
+    CHECK("snapshot: refresh succeeds",
+          axiom_ring_peek_snapshot(&ring, out, sizeof(out), &tail_snapshot) == sizeof(out));
+    CHECK("snapshot: current bytes copied", out[0] == 5u && out[3] == 8u);
+    CHECK("snapshot: matching consume succeeds",
+          axiom_ring_consume_if(&ring, tail_snapshot, sizeof(out)));
+}
+
 int main(void) {
     test_complete_frame_overwrite();
+    test_peek_consume_snapshot();
     TEST_RESULT("test_core_overwrite", failures);
     return failures;
 }

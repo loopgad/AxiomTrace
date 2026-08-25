@@ -15,6 +15,36 @@ A normal firmware build needs a GNU11 GCC/Clang compiler and CMake only when con
 
 Define `AXIOMTRACE_NO_DEFAULT_PORT` in that implementation TU to omit generic weak defaults and provide all `axiom_port_*` functions in the hardware project.
 
+For the modular CMake target, use `AXIOM_PORT_SOURCE=NONE` instead of relying
+on a generic or architecture provider (`AXIOM_EXTERNAL_PORT=ON` is retained as
+a deprecated compatibility alias). The consuming firmware owns the complete
+Port contract and the target's compiler/linker configuration.
+
+## Installing the host tools
+
+From the repository root, install the Python 3.12 package and its command-line
+entry points in an isolated environment. This also works with Python builds
+that enforce PEP 668:
+
+```sh
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install ./tool
+```
+
+Add the optional YAML parser only when event definitions use YAML:
+
+```sh
+python -m pip install "./tool[yaml]"
+```
+
+The repository's locked alternative is:
+
+```sh
+uv sync --project tool
+uv run --project tool axiom-decoder trace.bin --format raw
+```
+
 ## Installed commands
 
 The `axiomtrace-tools` Python 3.12 package installs four commands:
@@ -23,7 +53,7 @@ The `axiomtrace-tools` Python 3.12 package installs four commands:
 | --- | --- |
 | `axiom-decoder` | Read a binary file, resynchronize Wire frames, validate framing/CRC, and render `raw`, `text`, `json`, or `jsonl` |
 | `axiom-codegen` | Convert JSON or optional YAML event definitions into C headers, dictionary JSON, source map, and metadata identity |
-| `axiom-bundle` | Generate and inspect a versioned directory containing dictionary, source map, build information, and identity |
+| `axiom-bundle` | Generate a versioned directory containing dictionary, source map, build information, and identity; use `axiom-validate --bundle` to validate it |
 | `axiom-validate` | Validate definitions, dictionaries, bundles, golden vectors, and traces |
 
 YAML support is optional; JSON requires no YAML dependency.

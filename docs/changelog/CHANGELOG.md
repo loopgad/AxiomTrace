@@ -9,19 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- Top-level Port selection now has one explicit architecture path (`host`, `cortex-m`, or `riscv`); SDK-dependent vendor integrations remain self-contained.
-- Documentation now matches the actual source tree and distinguishes core builds from vendor packages.
-
-### Removed
-- Unwired root examples, placeholder `ports/soc` selectors, and unused per-architecture CMake wrappers.
-
-## [1.0.0] - 2026-07-15
+## [1.0.0] - 2026-08-25
 
 ### Added
 - Public diagnostics counters for filtering, Core ring pressure, frontend overflow, invalid input, and backend loss.
 - Release single header with one implementation TU mode, optional default Port, Memory/Deferred backends, and multi-TU tests.
 - Installable `AxiomTrace::axiomtrace` CMake package and add-subdirectory/install consumer fixtures.
+- A compile-checked `baremetal/examples/example_custom_port.c` skeleton covering the complete Port contract and Backend callback shape.
+- Isolated `venv` and locked `uv` host-tool installation paths for PEP 668-managed Python environments.
 
 ### Changed
 - Core ingress now validates all public inputs, defaults to dropping new frames, and only overwrites complete old frames when explicitly configured.
@@ -29,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deferred buffering is independent of downstream readiness and retains failed frames for retry.
 - Fault Capsule uses one record-aware frame ring and streams v1 images without a second full RAM image.
 - README and toolchain contracts now distinguish tested Host behavior, compile-only reference ports, and experimental platforms.
+- Top-level Port selection now has one explicit architecture path (`host`, `cortex-m`, or `riscv`); SDK-dependent vendor integrations remain self-contained.
+- Documentation now matches the actual source tree and distinguishes core builds from vendor packages.
+- STM32, nRF52, and ESP32 directories are now reference-only integration maps; they no longer compile unverified register/RTT examples or inject board-specific compiler flags.
+- The Port API documentation now distinguishes weak Host defaults from complete architecture providers and makes the custom integration boundary explicit.
+
+### Removed
+- Unwired root examples, placeholder `ports/soc` selectors, unused per-architecture CMake wrappers, and unverified vendor register/transport implementations.
 
 ## [0.7.0] - 2026-05-30
 

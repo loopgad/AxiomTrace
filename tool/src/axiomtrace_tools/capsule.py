@@ -8,11 +8,23 @@ import struct
 from pathlib import Path
 from typing import Any
 
-from axiomtrace_tools.decoder import decode_stream, extract_metadata_id
+from axiomtrace_tools.decoder import (
+    FRAME_SYNC,
+    WIRE_VERSION_MAJOR,
+    WIRE_VERSION_MINOR,
+    decode_frame,
+    decode_stream,
+    extract_metadata_id,
+)
 from axiomtrace_tools.render import render_json, render_text
 from axiomtrace_tools.dictionary import EventDictionary
 
 CAPSULE_MAGIC = b"AXCP"
+CAPSULE_VERSION = 1
+SNAPSHOT_FIELDS = {
+    1: ("pc", "lr", "sp", "xpsr"),
+    2: ("mepc", "mcause", "mtval", "ra", "sp"),
+}
 
 
 def decode_capsule(data: bytes) -> dict[str, Any]:
@@ -20,6 +32,8 @@ def decode_capsule(data: bytes) -> dict[str, Any]:
     if len(data) < 25 or data[:4] != CAPSULE_MAGIC:
         raise ValueError("invalid capsule magic or truncated capsule")
     version = data[4]
+    if version != CAPSULE_VERSION:
+        raise ValueError(f"unsupported capsule version: {version}")
     capsule_len = struct.unpack_from("<H", data, 5)[0]
     if capsule_len != len(data):
         raise ValueError("capsule length mismatch")
@@ -36,7 +50,13 @@ def decode_capsule(data: bytes) -> dict[str, Any]:
     snapshot = data[position:position + snapshot_len]
     position += snapshot_len
     frame_stream = data[position:-4]
-    frames = decode_stream(frame_stream)
+    frames = _decode_capsule_frames(frame_stream)
+    expected_frame_count = data[17] + data[18]
+    if len(frames) != expected_frame_count:
+        raise ValueError(
+            "capsule frame count mismatch: "
+            f"header has {expected_frame_count}, decoded {len(frames)}"
+        )
     return {
         "format": "v1.0-draft",
         "version": version,
@@ -113,13 +133,41 @@ def render_capsule_report(
 
 
 def _snapshot_fields(snapshot_id: int, data: bytes) -> dict[str, Any]:
-    fields = ["pc", "lr", "sp", "xpsr"] if snapshot_id == 1 else ["mepc", "mcause", "mtval", "ra", "sp"]
     result: dict[str, Any] = {"snapshot_id": snapshot_id, "raw_hex": data.hex()}
+    fields = SNAPSHOT_FIELDS.get(snapshot_id)
+    if fields is None:
+        result["unsupported"] = True
+        return result
     for index, field in enumerate(fields):
         start = index * 4
         if start + 4 <= len(data):
             result[field] = struct.unpack_from("<I", data, start)[0]
     return result
+
+
+def _decode_capsule_frames(frame_stream: bytes) -> list[dict[str, Any]]:
+    """Decode capsule records without the stream decoder's resynchronization."""
+    frames: list[dict[str, Any]] = []
+    offset = 0
+    expected_version = (WIRE_VERSION_MAJOR, WIRE_VERSION_MINOR)
+    while offset < len(frame_stream):
+        if frame_stream[offset] != FRAME_SYNC:
+            raise ValueError("capsule frame stream contains non-frame data")
+        frame, next_offset = decode_frame(frame_stream, offset)
+        if frame is None:
+            raise ValueError("capsule frame stream is truncated")
+        if "error" in frame:
+            raise ValueError(f"capsule frame decode error: {frame['error']}")
+        if tuple(frame.get("version", ())) != expected_version:
+            raise ValueError(
+                "capsule frame wire version must be "
+                f"{expected_version[0]}.{expected_version[1]}"
+            )
+        if next_offset <= offset:
+            raise ValueError("capsule frame decoder did not advance")
+        frames.append(frame)
+        offset = next_offset
+    return frames
 
 
 def _escape_html(value: str) -> str:

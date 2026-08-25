@@ -9,6 +9,7 @@ understanding which changes shipped in each version.
 
 | Version | Date | Commit Range | Key Changes |
 |---------|------|--------------|-------------|
+| v1.0.0 | 2026-08-25 | f2fecaa..v1.0.0 | Port-free Core, explicit providers, concurrency hardening, strict tooling and release gates |
 | v0.7.0 | 2026-05-30 | 4a58af7 ~ f0e4c7f | Wire v2, metadata bundle, CI, architecture refactor |
 | v0.6.0 | 2026-05-27 | f11a10a ~ c2914c0 | Docs sync, code quality, MCU benchmark, wire v2 payload |
 | v0.5.0-probe | — | — | **Skipped** (probe timing investigation deferred) |

@@ -10,7 +10,9 @@ set(AXIOM_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory("${AXIOMTRACE_ROOT}" axiomtrace-source)
 
 add_executable(fixture main.c emitter_a.c emitter_b.c)
-target_link_libraries(fixture PRIVATE axiomtrace)
+target_link_libraries(fixture PRIVATE
+    AxiomTrace::axiomtrace
+    AxiomTrace::port_generic)
 
 set(AXIOM_FIXTURE_LOCATION_MODE "file_id" CACHE STRING "Location mode for the bundle integration fixture")
 set_property(CACHE AXIOM_FIXTURE_LOCATION_MODE PROPERTY STRINGS file_id hash)

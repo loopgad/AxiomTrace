@@ -7,8 +7,8 @@
  *   cmake -B build -DAXIOM_PLATFORM=host
  *   cmake --build build --target example_minimal
  *
- * Build with Make (from baremetal directory):
- *   make example_minimal
+ * The example prints one complete frame as hex. See the repository README for
+ * Linux/macOS and PowerShell commands that convert this output to trace.bin.
  * ============================================================================ */
 
 #include "axiomtrace.h"

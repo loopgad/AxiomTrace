@@ -37,9 +37,14 @@ class AxiomBundle:
         return self.manifest.get("metadata", {}).get("id")
 
     def artifact_path(self, key: str) -> Path | None:
-        value = self.manifest.get("artifacts", {}).get(key)
+        artifacts = self.manifest.get("artifacts", {})
+        if not isinstance(artifacts, dict):
+            raise ValueError("bundle artifacts must be an object")
+        value = artifacts.get(key)
         if not value:
             return None
+        if not isinstance(value, str):
+            raise ValueError(f"bundle artifact path must be a string: {key}")
         return (self.root / value).resolve()
 
     def load_dictionary(self) -> EventDictionary | None:
@@ -55,8 +60,7 @@ def load_bundle(path: str | Path) -> AxiomBundle:
     manifest_path = bundle_path / "manifest.json" if bundle_path.is_dir() else bundle_path
     with manifest_path.open("r", encoding="utf-8") as handle:
         manifest = json.load(handle)
-    if manifest.get("schema") != BUNDLE_SCHEMA:
-        raise ValueError(f"unsupported bundle schema: {manifest.get('schema')}")
+    _validate_manifest(manifest)
     return AxiomBundle(manifest_path.parent.resolve(), manifest)
 
 
@@ -192,6 +196,42 @@ def _copy_optional(path: str | Path | None, out_dir: Path) -> Path | None:
     if source.resolve() != destination.resolve():
         shutil.copy2(source, destination)
     return destination
+
+
+def _validate_manifest(manifest: Any) -> dict[str, Any]:
+    if not isinstance(manifest, dict):
+        raise ValueError("bundle manifest root must be an object")
+    if manifest.get("schema") != BUNDLE_SCHEMA:
+        raise ValueError(f"unsupported bundle schema: {manifest.get('schema')}")
+    if not isinstance(manifest.get("bundle_version"), int) or isinstance(manifest["bundle_version"], bool):
+        raise ValueError("bundle_version must be an integer")
+    metadata = manifest.get("metadata")
+    if not isinstance(metadata, dict):
+        raise ValueError("bundle metadata must be an object")
+    if not isinstance(metadata.get("id"), str):
+        raise ValueError("bundle metadata id must be a string")
+    if not isinstance(metadata.get("wire_version"), str):
+        raise ValueError("bundle metadata wire_version must be a string")
+    if "identity_basis" in metadata:
+        _validate_string_array(metadata["identity_basis"], "bundle metadata identity_basis")
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, dict):
+        raise ValueError("bundle artifacts must be an object")
+    for key, value in artifacts.items():
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f"bundle artifact path must be a string: {key}")
+    for key in ("firmware", "location", "decoder", "features"):
+        if key in manifest and not isinstance(manifest[key], dict):
+            raise ValueError(f"bundle {key} must be an object")
+    location = manifest.get("location", {})
+    if "mode" in location and location["mode"] not in {"none", "hash", "file_id"}:
+        raise ValueError(f"unsupported location mode: {location['mode']}")
+    return manifest
+
+
+def _validate_string_array(value: Any, field: str) -> None:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{field} must be an array of strings")
 
 
 def _build_info(

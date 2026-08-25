@@ -58,10 +58,49 @@ The repository example prints one complete frame as hexadecimal:
 ```sh
 cmake -S . -B build -DAXIOM_BUILD_TESTS=ON -DAXIOM_BUILD_EXAMPLES=ON
 cmake --build build
-./build/baremetal/examples/example_minimal
 ```
 
-After installing the Python tool, decode a binary trace structurally with no dictionary:
+On Linux/macOS, capture the example's hex output, convert it to the binary trace
+format, and decode it without a dictionary:
+
+```sh
+./build/baremetal/examples/example_minimal | tee trace.hex
+xxd -r -p trace.hex trace.bin
+```
+
+On PowerShell, the recursive lookup works with both single- and multi-config
+CMake generators:
+
+```powershell
+$example = Get-ChildItem .\build -Recurse -Filter example_minimal.exe | Select-Object -First 1
+$hex = ((& $example.FullName) -join '') -replace '\s', ''
+$bytes = for ($i = 0; $i -lt $hex.Length; $i += 2) { [Convert]::ToByte($hex.Substring($i, 2), 16) }
+[IO.File]::WriteAllBytes((Join-Path $PWD 'trace.bin'), [byte[]]$bytes)
+```
+
+Install the host tools in an isolated Python environment (Python 3.12 or
+newer). This avoids modifying an externally-managed system interpreter:
+
+```sh
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install ./tool
+# Optional YAML event-source support:
+python -m pip install "./tool[yaml]"
+```
+
+PowerShell uses the same isolated environment:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install .\tool
+```
+
+The locked alternative is `uv sync --project tool`; then run commands as
+`uv run --project tool axiom-decoder trace.bin --format raw`.
+
+Now decode the binary trace structurally with no dictionary:
 
 ```sh
 axiom-decoder trace.bin --format raw
@@ -100,7 +139,13 @@ cmake -S . -B build-cortex-m -DAXIOM_PLATFORM=cortex-m \
   -DAXIOM_BUILD_TESTS=OFF -DAXIOM_BUILD_EXAMPLES=OFF
 ```
 
-`AXIOM_SOC` and `AXIOM_BOARD` are intentionally not top-level options. SDK-dependent integrations are separate packages under `baremetal/ports/stm32`, `baremetal/ports/nrf52`, and `baremetal/ports/esp32`; see the [porting guide](docs/reference/porting_guide.md) for their dependency boundaries.
+`AXIOM_SOC` and `AXIOM_BOARD` are intentionally not top-level options. SDK-dependent integrations are separate reference maps under `baremetal/ports/stm32`, `baremetal/ports/nrf52`, and `baremetal/ports/esp32`; they do not compile universal hardware drivers. Copy the [custom Port/Backend skeleton](baremetal/examples/example_custom_port.c) into the firmware and see the [porting guide](docs/reference/porting_guide.md) for dependency boundaries.
+
+Architecture ports read hardware cycle counters. Set the real core clock with
+`-DAXIOM_CPU_HZ=<hz>` to expose microsecond timestamps; without it they return
+zero rather than mislabel CPU cycles as time. Use `-DAXIOM_PORT_SOURCE=NONE`
+when the application or vendor package supplies the complete Port API;
+`AXIOM_EXTERNAL_PORT=ON` remains a deprecated compatibility alias.
 
 ## Resource presets
 
@@ -123,6 +168,8 @@ The release budgets are Tiny RAM ≤512 B, Prod ≤1.5 KiB, Field ≤4.5 KiB, an
 - [Backend contract](spec/backend_contract.md)
 - [Fault capsule](spec/fault_capsule.md)
 - [Toolchain design](spec/toolchain_ecosystem_design.md)
+- [Decoder protocol](spec/decoder_protocol.md)
+- [Event dictionary](spec/event_dictionary.md)
 - [Porting guide](docs/reference/porting_guide.md)
 - [Changelog](docs/changelog/CHANGELOG.md)
 

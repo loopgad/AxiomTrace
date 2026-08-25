@@ -41,10 +41,15 @@ def validate_bundle(path: str | Path) -> AxiomBundle:
         raise ValueError("bundle metadata identity does not match decode artifacts")
     if bundle.manifest.get("metadata", {}).get("wire_version") != WIRE_VERSION:
         raise ValueError(f"bundle wire_version must be {WIRE_VERSION}")
+    source_location_mode = source_map.get("location_mode")
+    if source_location_mode is not None and location.get("mode") != source_location_mode:
+        raise ValueError("bundle location mode does not match source map")
     if location.get("mode") == "file_id" and not source_map.get("files"):
         raise ValueError("file_id bundle must contain source-map file entries")
     with bundle.artifact_path("build_info").open("r", encoding="utf-8") as handle:  # type: ignore[union-attr]
         build_info = json.load(handle)
+    if not isinstance(build_info, dict):
+        raise ValueError("bundle build_info root must be an object")
     if build_info.get("metadata_id") != expected_id:
         raise ValueError("build_info metadata identity mismatch")
     return bundle
@@ -106,5 +111,7 @@ def validate_golden(path: str | Path) -> list[Path]:
             actual = json.loads(json.dumps(decoded))
             if expected != actual:
                 raise ValueError(f"golden output mismatch: {frame_path.name}")
+        else:
+            raise ValueError(f"golden expected output missing: {expected_path.name}")
         checked.append(frame_path)
     return checked

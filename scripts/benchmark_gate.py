@@ -14,6 +14,11 @@ SUMMARY_ROW = re.compile(
     r"^(B\d+:[^\s]+)\s+[-+0-9.]+\s+[-+0-9.]+\s+([-+0-9.]+)\s+",
     re.MULTILINE,
 )
+SUMMARY_STATUS_ROW = re.compile(
+    r"^(B\d+:[^\s]+)\s+[-+0-9.]+\s+[-+0-9.]+\s+[-+0-9.]+\s+"
+    r"[-+0-9.]+\s+\d+\s+(PASS|FAIL|N/A)\s*$",
+    re.MULTILINE,
+)
 
 
 def parse_summary(output: str) -> dict[str, float]:
@@ -23,15 +28,30 @@ def parse_summary(output: str) -> dict[str, float]:
     return values
 
 
+def parse_budget_failures(output: str) -> list[str]:
+    """Return benchmark scenarios that explicitly fail their absolute budget."""
+    return [name for name, status in SUMMARY_STATUS_ROW.findall(output) if status == "FAIL"]
+
+
 def _run(executable: Path) -> dict[str, float]:
     result = subprocess.run(
         [str(executable)],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
     )
+    failures = parse_budget_failures(result.stdout)
+    if failures:
+        raise ValueError(f"benchmark budget failed for scenarios: {sorted(failures)}")
+    if result.returncode != 0:
+        detail = result.stderr.strip()
+        if detail:
+            detail = f": {detail}"
+        raise RuntimeError(
+            f"benchmark executable failed with exit code {result.returncode}{detail}"
+        )
     return parse_summary(result.stdout)
 
 

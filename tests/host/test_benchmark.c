@@ -82,6 +82,7 @@ typedef struct {
     double      sigma_us;
     uint32_t    drops;      /* Ring overflow drop count (if applicable) */
     bool        foc_pass;   /* FOC budget check result */
+    bool        foc_scenario; /* Apply the absolute FOC budget gate */
 } bench_result_t;
 
 static int compare_double(const void *a, const void *b) {
@@ -114,8 +115,8 @@ static void compute_stats(double *sorted, int count, bench_result_t *r, const ch
     r->sigma_us = 0;
     if (count > 1) {
         double avg_sq = variance / count;
-        double x = avg_sq / 2.0;
-        if (x > 0) {
+        double x = avg_sq > 1.0 ? avg_sq : 1.0;
+        if (avg_sq > 0) {
             for (int i = 0; i < 20; i++) x = (x + avg_sq / x) / 2.0;
             r->sigma_us = x;
         }
@@ -130,11 +131,15 @@ static void print_round(int round, const bench_result_t *r) {
            round, r->avg_us, r->p99_us, r->p999_us, r->p9999_us, r->jitter_us);
 }
 
-static void print_final(const bench_result_t *avg, const char *foc_status) {
+static void print_final(const bench_result_t *avg, bool foc_scenario) {
     printf("  Aggregated: avg=%.2f±%.2fus P99.9=%.2f±%.3fus jitter=%.2f±%.3fus\n",
            avg->avg_us, avg->sigma_us, avg->p999_us, avg->sigma_us, avg->jitter_us, avg->sigma_us);
-    printf("  FOC budget check: P99.9=%.2fus %s %.1fus → %s\n",
-           avg->p999_us, foc_status, FOC_BUDGET_US, avg->foc_pass ? "PASS ✓" : "FAIL ✗");
+    if (foc_scenario) {
+        printf("  FOC budget check: P99.9=%.2fus ≤ %.1fus → %s\n",
+               avg->p999_us, FOC_BUDGET_US, avg->foc_pass ? "PASS ✓" : "FAIL ✗");
+    } else {
+        printf("  Budget check: informational scenario (not FOC-gated)\n");
+    }
 }
 
 /* Measure timer overhead (QPC / clock_gettime call cost) */
@@ -163,9 +168,20 @@ static bench_result_t run_multi_round(
     bool foc_scenario)
 {
     bench_result_t round_results[BENCH_ROUNDS];
+    size_t total_sample_count = (size_t)iters_per_round * (size_t)rounds;
+    double *all_samples = (double *)malloc(total_sample_count * sizeof(double));
+    if (all_samples == NULL) {
+        fprintf(stderr, "benchmark: unable to allocate merged sample buffer for %s\n", name);
+        exit(EXIT_FAILURE);
+    }
 
     for (int rd = 0; rd < rounds; rd++) {
         double *samples = (double *)malloc((size_t)iters_per_round * sizeof(double));
+        if (samples == NULL) {
+            free(all_samples);
+            fprintf(stderr, "benchmark: unable to allocate samples for %s\n", name);
+            exit(EXIT_FAILURE);
+        }
         axiom_init();
         s_dispatch_count = 0;
         uint32_t drop_before = 0;
@@ -193,25 +209,31 @@ static bench_result_t run_multi_round(
         qsort(samples, (size_t)iters_per_round, sizeof(double), compare_double);
         compute_stats(samples, iters_per_round, &round_results[rd], name);
         round_results[rd].drops = drop_before;
+        memcpy(all_samples + (size_t)rd * (size_t)iters_per_round,
+               samples, (size_t)iters_per_round * sizeof(double));
         print_round(rd + 1, &round_results[rd]);
         free(samples);
     }
 
-    /* Aggregate across rounds: average the averages */
+    /* Aggregate percentiles from the complete raw sample population. */
+    qsort(all_samples, total_sample_count, sizeof(double), compare_double);
+    bench_result_t merged_stats;
+    compute_stats(all_samples, (int)total_sample_count, &merged_stats, name);
+
+    /* Aggregate round averages for the inter-round stability estimate. */
     bench_result_t agg = { .name = name };
-    double sum_avg = 0, sum_p999 = 0, sum_jitter = 0;
+    double sum_avg = 0;
     for (int i = 0; i < rounds; i++) {
         sum_avg   += round_results[i].avg_us;
-        sum_p999  += round_results[i].p999_us;
-        sum_jitter += round_results[i].jitter_us;
-        if (round_results[i].min_us < agg.min_us || i == 0) agg.min_us = round_results[i].min_us;
-        if (round_results[i].max_us > agg.max_us)           agg.max_us = round_results[i].max_us;
     }
-    agg.avg_us    = sum_avg / rounds;
-    agg.p999_us   = sum_p999 / rounds;
-    agg.jitter_us = sum_jitter / rounds;
-    agg.p99_us    = round_results[rounds - 1].p99_us; /* use last round */
-    agg.p9999_us  = round_results[rounds - 1].p9999_us;
+    agg.min_us    = merged_stats.min_us;
+    agg.max_us    = merged_stats.max_us;
+    agg.avg_us    = merged_stats.avg_us;
+    agg.median_us = merged_stats.median_us;
+    agg.p99_us    = merged_stats.p99_us;
+    agg.p999_us   = merged_stats.p999_us;
+    agg.p9999_us  = merged_stats.p9999_us;
+    agg.jitter_us = merged_stats.jitter_us;
     agg.drops     = round_results[0].drops;
 
     /* Compute inter-round variance of avg */
@@ -221,13 +243,22 @@ static bench_result_t run_multi_round(
         double d = round_results[i].avg_us - avg_of_avgs;
         var += d * d;
     }
-    double x = var / rounds;
-    if (x > 0) { for (int i = 0; i < 20; i++) x = (x + x) / 2.0; } /* rough sqrt */
-    agg.sigma_us = x;
+    double variance_of_averages = var / rounds;
+    double sigma_of_averages = 0.0;
+    if (variance_of_averages > 0) {
+        sigma_of_averages = variance_of_averages > 1.0 ? variance_of_averages : 1.0;
+        for (int i = 0; i < 20; i++) {
+            sigma_of_averages =
+                (sigma_of_averages + variance_of_averages / sigma_of_averages) / 2.0;
+        }
+    }
+    agg.sigma_us = sigma_of_averages;
+    agg.foc_scenario = foc_scenario;
 
-    agg.foc_pass = (agg.p999_us <= FOC_BUDGET_US);
+    agg.foc_pass = !foc_scenario || (agg.p999_us <= FOC_BUDGET_US);
 
-    print_final(&agg, foc_scenario ? "≤" : "≤");
+    free(all_samples);
+    print_final(&agg, foc_scenario);
     return agg;
 }
 
@@ -508,6 +539,8 @@ int main(void) {
            "ID", "Scenario", "avg(μs)", "P99(μs)", "P99.9(μs)", "jitter", "drops", "FOC?");
     printf("--------------------------------------------------\n");
     for (int i = 0; i < idx; i++) {
+        const char *foc_status = !results[i].foc_scenario ? "N/A" :
+            (results[i].foc_pass ? "PASS" : "FAIL");
         printf("%-5s %-30s %8.2f %8.2f %8.2f %8.2f %6u %s\n",
                results[i].name,
                "",
@@ -516,7 +549,7 @@ int main(void) {
                results[i].p999_us,
                results[i].jitter_us,
                results[i].drops,
-               results[i].foc_pass ? "PASS" : (results[i].jitter_us > 0 ? "N/A" : "FAIL"));
+               foc_status);
     }
 
     /* === Performance Analysis ===
@@ -552,8 +585,19 @@ int main(void) {
     printf("  NOTE: MCU estimates are NOT from PC benchmark.\n");
     printf("        For exact numbers: arm-none-eabi-gcc -S -O2 -mcpu=cortex-m4\n");
 
+    bool budget_failed = false;
+    for (int i = 0; i < idx; i++) {
+        if (results[i].foc_scenario && !results[i].foc_pass) {
+            budget_failed = true;
+        }
+    }
+
     printf("\n==================================================\n");
     printf("[BENCH SUMMARY] %d scenarios completed\n", idx + 2);
 
+    if (budget_failed) {
+        fprintf(stderr, "FOC budget check FAILED for one or more scenarios\n");
+        return 1;
+    }
     return 0;
 }

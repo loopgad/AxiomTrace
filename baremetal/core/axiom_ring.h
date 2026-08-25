@@ -55,6 +55,16 @@ uint16_t axiom_ring_read(axiom_ring_t *ring, uint8_t *out, uint16_t max_len);
 /* Peek at data without consuming. Returns bytes available. */
 uint16_t axiom_ring_peek(const axiom_ring_t *ring, uint8_t *out, uint16_t max_len);
 
+/* Peek while returning the tail position used for the snapshot. The caller
+ * can pair this with axiom_ring_consume_if() to avoid consuming a different
+ * record after an OVERWRITE producer advances the tail. */
+uint16_t axiom_ring_peek_snapshot(const axiom_ring_t *ring, uint8_t *out,
+                                  uint16_t max_len, uint32_t *tail_snapshot);
+
+/* Consume only when the ring tail is still the snapshot returned by
+ * axiom_ring_peek_snapshot(). */
+bool axiom_ring_consume_if(axiom_ring_t *ring, uint32_t tail_snapshot, uint16_t n);
+
 /* Advance tail by 'n' bytes without copying data.
  * Caller must have already read the data (e.g., via axiom_ring_peek).
  * Caller must ensure n <= axiom_ring_used(). */

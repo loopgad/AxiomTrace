@@ -37,15 +37,6 @@ extern "C" {
 #define AXIOM_INTERNAL_CONCAT_RAW(a, b) a ## b
 #define AXIOM_INTERNAL_CONCAT(a, b) AXIOM_INTERNAL_CONCAT_RAW(a, b)
 
-/* ---------------------------------------------------------------------------
- * Core write declaration (defined in axiom_event.c)
- * --------------------------------------------------------------------------- */
-void axiom_write(axiom_level_t level, uint8_t module_id, uint16_t event_id,
-                 const uint8_t *payload, uint8_t payload_len);
-void axiom_init(void);
-void axiom_flush(void);
-void axiom_internal_record_encode_drop(uint8_t module_id, uint16_t event_id);
-
 /* Runtime filter control — declared in axiom_filter.h, exposed here for convenience.
  * void axiom_level_mask_set(uint32_t mask);
  * uint32_t axiom_level_mask_get(void);
@@ -98,11 +89,6 @@ static inline uint16_t axiom_internal_fnv1a_16(const char *s) {
             axiom_internal_record_encode_drop((uint8_t)(mod), (uint16_t)(evt)); \
         } \
     } while (0)
-
-/* System-reserved metadata identity event used by host bundle-store selection. */
-#define AXIOM_SYSTEM_MODULE_ID          0x00u
-#define AXIOM_SYSTEM_EVENT_DROP_SUMMARY 0x0001u
-#define AXIOM_SYSTEM_EVENT_METADATA_ID  0x0002u
 
 static inline void axiom_emit_metadata_id(const uint8_t metadata_id[AXIOM_METADATA_ID_LEN]) {
     AXIOM_INTERNAL_DECLARE_BUILDER();
@@ -241,9 +227,9 @@ static inline void axiom_emit_metadata_id(const uint8_t metadata_id[AXIOM_METADA
          axiom_builder_tagged_u16(&axiom_internal_builder, axiom_internal_tag_hash); \
          AXIOM_INTERNAL_BUILDER_ENCODE_TAGGED_ONE(axiom_internal_builder, value); \
          if (axiom_internal_builder.valid) { \
-             axiom_write(AXIOM_LEVEL_DEBUG, 0, 0, axiom_internal_builder.data, \
+             axiom_write(AXIOM_LEVEL_DEBUG, AXIOM_SYSTEM_MODULE_ID, AXIOM_SYSTEM_EVENT_PROBE, axiom_internal_builder.data, \
                          (uint8_t)axiom_internal_builder.pos); \
-         } else { axiom_internal_record_encode_drop(0u, 0u); } } while(0)
+         } else { axiom_internal_record_encode_drop(AXIOM_SYSTEM_MODULE_ID, AXIOM_SYSTEM_EVENT_PROBE); } } while(0)
 
 #else /* PROD */
 

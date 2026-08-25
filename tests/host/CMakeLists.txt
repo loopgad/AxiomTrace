@@ -2,6 +2,13 @@ cmake_minimum_required(VERSION 3.16)
 project(axiom_tests LANGUAGES C)
 set(CMAKE_C_STANDARD 11)
 
+if(AXIOM_BUILD_BENCHMARKS AND NOT AXIOM_BUILD_TESTS)
+    add_executable(test_benchmark test_benchmark.c)
+    target_link_libraries(test_benchmark PRIVATE
+        axiomtrace AxiomTrace::port_generic)
+    return()
+endif()
+
 # Simple host tests without Unity for now
 add_executable(test_ring_buf test_ring.c)
 target_link_libraries(test_ring_buf PRIVATE axiomtrace)
@@ -10,6 +17,10 @@ add_test(NAME test_ring_buf COMMAND test_ring_buf)
 add_executable(test_crc test_crc.c)
 target_link_libraries(test_crc PRIVATE axiomtrace)
 add_test(NAME test_crc COMMAND test_crc)
+
+add_executable(test_cobs test_cobs.c)
+target_link_libraries(test_cobs PRIVATE axiomtrace)
+add_test(NAME test_cobs COMMAND test_cobs)
 
 add_executable(test_event test_event.c)
 target_link_libraries(test_event PRIVATE axiomtrace)
@@ -102,10 +113,10 @@ function(add_config_preset_test name preset profile ring payload modules locatio
 endfunction()
 
 add_config_preset_test(tiny   AXIOM_PRESET_TINY   AXIOM_PROFILE_PROD  256u  32u  16u AXIOM_CFG_LOCATION_MODE_NONE 0 0 0 0 32u 16u 4096u 0 1 0 0 5 1000000u 64u 8192u)
-add_config_preset_test(prod   AXIOM_PRESET_PROD   AXIOM_PROFILE_PROD  1024u 64u  32u AXIOM_CFG_LOCATION_MODE_NONE 0 1 1 0 32u 16u 4096u 0 1 0 0 5 1000000u 64u 8192u)
-add_config_preset_test(field  AXIOM_PRESET_FIELD  AXIOM_PROFILE_FIELD 2048u 96u  32u AXIOM_CFG_LOCATION_MODE_NONE 1 1 1 1 16u 8u  2048u 0 1 0 0 5 1000000u 64u 8192u)
-add_config_preset_test(dev    AXIOM_PRESET_DEV    AXIOM_PROFILE_DEV   4096u 128u 32u AXIOM_CFG_LOCATION_MODE_NONE 1 1 1 1 32u 16u 4096u 0 1 0 0 5 1000000u 64u 8192u)
-add_config_preset_test(custom AXIOM_PRESET_CUSTOM AXIOM_PROFILE_DEV   4096u 128u 32u AXIOM_CFG_LOCATION_MODE_NONE 1 1 1 1 32u 16u 4096u 0 1 0 0 5 1000000u 64u 8192u)
+add_config_preset_test(prod   AXIOM_PRESET_PROD   AXIOM_PROFILE_PROD  1024u 64u  32u AXIOM_CFG_LOCATION_MODE_NONE 0 1 0 0 32u 16u 4096u 0 1 0 0 5 1000000u 64u 8192u)
+add_config_preset_test(field  AXIOM_PRESET_FIELD  AXIOM_PROFILE_FIELD 2048u 96u  32u AXIOM_CFG_LOCATION_MODE_NONE 1 1 0 1 16u 8u  2048u 0 1 0 0 5 1000000u 64u 8192u)
+add_config_preset_test(dev    AXIOM_PRESET_DEV    AXIOM_PROFILE_DEV   4096u 128u 32u AXIOM_CFG_LOCATION_MODE_NONE 1 1 0 1 32u 16u 4096u 0 1 0 0 5 1000000u 64u 8192u)
+add_config_preset_test(custom AXIOM_PRESET_CUSTOM AXIOM_PROFILE_DEV   4096u 128u 32u AXIOM_CFG_LOCATION_MODE_NONE 1 1 0 1 32u 16u 4096u 0 1 0 0 5 1000000u 64u 8192u)
 
 
 add_executable(test_location_file_id test_location.c)
@@ -187,10 +198,12 @@ add_executable(generate_golden generate_golden.c)
 target_link_libraries(generate_golden PRIVATE axiomtrace)
 
 # ---- Performance benchmark ----
-add_executable(test_benchmark test_benchmark.c)
-target_link_libraries(test_benchmark PRIVATE axiomtrace)
-# Host regression benchmark; target-MCU timing still requires platform measurement.
-add_test(NAME test_benchmark COMMAND test_benchmark)
+if(AXIOM_BUILD_BENCHMARKS)
+    add_executable(test_benchmark test_benchmark.c)
+    target_link_libraries(test_benchmark PRIVATE axiomtrace)
+    # Host regression benchmark; target-MCU timing still requires platform measurement.
+    add_test(NAME test_benchmark COMMAND test_benchmark)
+endif()
 
 # Release single-header: one implementation TU plus two ordinary consumers.
 find_package(Python3 3.12 COMPONENTS Interpreter REQUIRED)
@@ -236,6 +249,23 @@ add_test(NAME cmake_add_subdirectory_build
     COMMAND ${CMAKE_COMMAND} --build ${AXIOM_ADDSUB_BUILD})
 set_tests_properties(cmake_add_subdirectory_build PROPERTIES
     FIXTURES_REQUIRED axiom_addsub)
+
+set(AXIOM_NO_PORT_BUILD ${CMAKE_CURRENT_BINARY_DIR}/consumer-no-port-${CMAKE_C_COMPILER_ID})
+add_test(NAME cmake_no_port_configure
+    COMMAND ${CMAKE_COMMAND}
+        -G "${CMAKE_GENERATOR}"
+        -S ${CMAKE_SOURCE_DIR}/tests/consumer/no_port
+        -B ${AXIOM_NO_PORT_BUILD}
+        -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+        "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
+        -DAXIOMTRACE_SOURCE=${CMAKE_SOURCE_DIR})
+set_tests_properties(cmake_no_port_configure PROPERTIES
+    FIXTURES_SETUP axiom_no_port)
+add_test(NAME cmake_no_port_link_rejected
+    COMMAND ${CMAKE_COMMAND} --build ${AXIOM_NO_PORT_BUILD})
+set_tests_properties(cmake_no_port_link_rejected PROPERTIES
+    FIXTURES_REQUIRED axiom_no_port
+    WILL_FAIL TRUE)
 
 set(AXIOM_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/installed)
 add_test(NAME cmake_install_package

@@ -10,8 +10,19 @@ include(CMakePackageConfigHelpers)
 option(AXIOM_BUILD_TESTS "Build host unit tests" OFF)
 option(AXIOM_BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(AXIOM_BUILD_EXAMPLES "Build examples" OFF)
+option(AXIOM_ENABLE_CLANG_TIDY
+    "Run low-noise clang-tidy checks while compiling AxiomTrace" OFF)
+set(AXIOM_CLANG_TIDY_CHECKS
+    "clang-analyzer-core.*"
+    CACHE STRING "Comma-separated clang-tidy checks for the optional gate")
+option(AXIOM_EXTERNAL_PORT
+    "Do not compile an architecture port; the consuming application supplies it" OFF)
+set(AXIOM_CPU_HZ "0" CACHE STRING
+    "Target CPU clock used by architecture ports to report microsecond timestamps")
 set(AXIOM_PRESET "dev" CACHE STRING "Resource preset: custom, tiny, prod, field, dev")
 set_property(CACHE AXIOM_PRESET PROPERTY STRINGS custom tiny prod field dev)
+set(AXIOM_PORT_SOURCE "" CACHE STRING
+    "Override port source(s); use NONE with an external port; semicolon-separated paths are accepted")
 
 # Windows Clang links ASan through a runtime DLL that is installed beside the
 # compiler resources rather than on PATH. Let CTest provide that directory to
@@ -72,12 +83,17 @@ endif()
 include(baremetal/ports/CMakeLists.txt)
 
 # ---------------------------------------------------------------------------
-# Static analysis integration (disabled during v1.0 refactor)
+# Optional low-noise static analysis
 # ---------------------------------------------------------------------------
-# find_program(CLANG_TIDY_EXE clang-tidy)
-# if(CLANG_TIDY_EXE)
-#     set(CMAKE_C_CLANG_TIDY "${CLANG_TIDY_EXE};--config-file=${CMAKE_SOURCE_DIR}/.clang-tidy")
-# endif()
+if(AXIOM_ENABLE_CLANG_TIDY)
+    find_program(AXIOM_CLANG_TIDY_EXE NAMES clang-tidy)
+    if(NOT AXIOM_CLANG_TIDY_EXE)
+        message(FATAL_ERROR "AXIOM_ENABLE_CLANG_TIDY=ON but clang-tidy was not found")
+    endif()
+    set(AXIOM_C_CLANG_TIDY
+        "${AXIOM_CLANG_TIDY_EXE};--checks=-*,${AXIOM_CLANG_TIDY_CHECKS};--warnings-as-errors=${AXIOM_CLANG_TIDY_CHECKS}")
+    message(STATUS "clang-tidy enabled: ${AXIOM_CLANG_TIDY_CHECKS}")
+endif()
 
 # ---------------------------------------------------------------------------
 # AxiomTrace core library
@@ -113,10 +129,46 @@ set(AXIOM_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/baremetal/backend/axiom_backend_deferred.c
 )
 
+# Keep the current install set for compatibility. These headers are included
+# in the modular public tree today, but are maintained as INTERNAL headers so
+# a future major release can narrow the boundary without silently removing
+# files that downstream projects may include directly.
+set(AXIOM_PUBLIC_HEADERS
+    ${PROJECT_SOURCE_DIR}/baremetal/axiomtrace.h
+    ${PROJECT_SOURCE_DIR}/baremetal/axiom_config.h
+    ${PROJECT_SOURCE_DIR}/baremetal/port/axiom_port.h
+    ${PROJECT_SOURCE_DIR}/baremetal/core/axiom_event.h
+    ${PROJECT_SOURCE_DIR}/baremetal/core/axiom_diagnostics.h
+    ${PROJECT_SOURCE_DIR}/baremetal/frontend/axiom_frontend.h
+    ${PROJECT_SOURCE_DIR}/baremetal/backend/axiom_backend.h
+)
+set(AXIOM_INTERNAL_HEADERS
+    ${PROJECT_SOURCE_DIR}/baremetal/include/axiom_static_assert.h
+    ${PROJECT_SOURCE_DIR}/baremetal/core/axiom_frame.h
+    ${PROJECT_SOURCE_DIR}/baremetal/core/axiom_encode.h
+    ${PROJECT_SOURCE_DIR}/baremetal/core/axiom_crc.h
+    ${PROJECT_SOURCE_DIR}/baremetal/core/axiom_ring.h
+    ${PROJECT_SOURCE_DIR}/baremetal/core/axiom_timestamp.h
+    ${PROJECT_SOURCE_DIR}/baremetal/core/axiom_filter.h
+    ${PROJECT_SOURCE_DIR}/baremetal/core/axiom_capsule.h
+    ${PROJECT_SOURCE_DIR}/baremetal/core/axiom_selftest.h
+    ${PROJECT_SOURCE_DIR}/baremetal/backend/axiom_backend_deferred.h
+    ${PROJECT_SOURCE_DIR}/baremetal/backend/axiom_cobs.h
+)
+set(AXIOM_INSTALL_HEADERS ${AXIOM_PUBLIC_HEADERS} ${AXIOM_INTERNAL_HEADERS})
+source_group("Public Headers" FILES ${AXIOM_PUBLIC_HEADERS})
+source_group("INTERNAL Headers" FILES ${AXIOM_INTERNAL_HEADERS})
+
 add_library(axiomtrace STATIC ${AXIOM_CORE_SOURCES} ${AXIOM_CORE_HEADERS})
 add_library(AxiomTrace::axiomtrace ALIAS axiomtrace)
 target_compile_features(axiomtrace PUBLIC c_std_11)
 set_target_properties(axiomtrace PROPERTIES C_EXTENSIONS ON)
+if(NOT AXIOM_CPU_HZ MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "AXIOM_CPU_HZ must be a non-negative integer")
+endif()
+if(AXIOM_ENABLE_CLANG_TIDY)
+    set_property(TARGET axiomtrace PROPERTY C_CLANG_TIDY "${AXIOM_C_CLANG_TIDY}")
+endif()
 target_include_directories(axiomtrace
     PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/baremetal>
@@ -144,10 +196,9 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang")
     )
 endif()
 
-# Port selection. Vendor packages are intentionally not mixed into this
-# target: they need SDK headers and board-specific linker configuration.
-# The AXIOM_PORT_SOURCES is set by baremetal/ports/CMakeLists.txt
-target_sources(axiomtrace PRIVATE ${AXIOM_PORT_SOURCES})
+# Port providers are deliberately not mixed into this target.  The selected
+# provider target from baremetal/ports/CMakeLists.txt is consumed explicitly
+# by the application at the final link step.
 
 # ---------------------------------------------------------------------------
 # Optional feature toggles (forwarded as -D preprocessor macros)
@@ -199,7 +250,42 @@ endif()
 # Tests
 # ---------------------------------------------------------------------------
 if(AXIOM_BUILD_TESTS)
+    if(NOT AXIOM_PLATFORM STREQUAL "host")
+        message(FATAL_ERROR
+            "AXIOM_BUILD_TESTS requires AXIOM_PLATFORM=host; "
+            "cross targets are compile-only")
+    endif()
     enable_testing()
+    add_subdirectory(tests/host)
+
+    # Host tests exercise the modular core and therefore need an explicit
+    # provider.  Single-header tests embed their own default/custom provider
+    # and must remain independent of the modular generic target.
+    if(AXIOM_PLATFORM STREQUAL "host" AND TARGET AxiomTrace::port_generic)
+        get_property(AXIOM_HOST_TARGETS
+            DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/host"
+            PROPERTY BUILDSYSTEM_TARGETS)
+        foreach(AXIOM_HOST_TARGET IN LISTS AXIOM_HOST_TARGETS)
+            set(AXIOM_HOST_NEEDS_GENERIC_PORT FALSE)
+            if(AXIOM_HOST_TARGET MATCHES "^test_" AND
+               NOT AXIOM_HOST_TARGET MATCHES "^test_single_header")
+                set(AXIOM_HOST_NEEDS_GENERIC_PORT TRUE)
+            elseif(AXIOM_HOST_TARGET STREQUAL "generate_golden" OR
+                   AXIOM_HOST_TARGET STREQUAL "axiomtrace_overwrite" OR
+                   AXIOM_HOST_TARGET STREQUAL "axiomtrace_small_payload")
+                set(AXIOM_HOST_NEEDS_GENERIC_PORT TRUE)
+            endif()
+            if(AXIOM_HOST_NEEDS_GENERIC_PORT)
+                target_link_libraries(${AXIOM_HOST_TARGET} PRIVATE
+                    AxiomTrace::port_generic)
+            endif()
+        endforeach()
+    endif()
+elseif(AXIOM_BUILD_BENCHMARKS)
+    if(NOT AXIOM_PLATFORM STREQUAL "host")
+        message(FATAL_ERROR
+            "AXIOM_BUILD_BENCHMARKS requires AXIOM_PLATFORM=host")
+    endif()
     add_subdirectory(tests/host)
 endif()
 
@@ -208,6 +294,10 @@ endif()
 # ---------------------------------------------------------------------------
 if(AXIOM_BUILD_EXAMPLES)
     add_subdirectory(baremetal/examples)
+    if(AXIOM_PLATFORM STREQUAL "host" AND TARGET AxiomTrace::port_generic)
+        target_link_libraries(example_minimal PRIVATE AxiomTrace::port_generic)
+        target_link_libraries(example_full PRIVATE AxiomTrace::port_generic)
+    endif()
 endif()
 if(AXIOM_BUILD_TESTS AND AXIOM_BUILD_EXAMPLES)
     find_package(Python3 3.12 COMPONENTS Interpreter REQUIRED)
@@ -221,14 +311,16 @@ endif()
 # ---------------------------------------------------------------------------
 # Installable CMake package
 # ---------------------------------------------------------------------------
-install(TARGETS axiomtrace EXPORT AxiomTraceTargets
+install(TARGETS axiomtrace axiomtrace_port_generic EXPORT AxiomTraceTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/axiomtrace)
+if(TARGET axiomtrace_port)
+    install(TARGETS axiomtrace_port EXPORT AxiomTraceTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/axiomtrace)
+endif()
 install(FILES
-    ${PROJECT_SOURCE_DIR}/baremetal/axiomtrace.h
-    ${PROJECT_SOURCE_DIR}/baremetal/axiom_config.h
-    ${AXIOM_CORE_HEADERS}
-    ${PROJECT_SOURCE_DIR}/baremetal/backend/axiom_backend_deferred.h
+    ${AXIOM_INSTALL_HEADERS}
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/axiomtrace)
 install(EXPORT AxiomTraceTargets
     FILE AxiomTraceTargets.cmake

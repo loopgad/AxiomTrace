@@ -58,10 +58,48 @@ int main(void) {
 ```sh
 cmake -S . -B build -DAXIOM_BUILD_TESTS=ON -DAXIOM_BUILD_EXAMPLES=ON
 cmake --build build
-./build/baremetal/examples/example_minimal
 ```
 
-安装 Python 工具后，无需字典即可结构化解码二进制 trace：
+在 Linux/macOS 上，将示例输出保存为 hex，转换为二进制 trace，再进行无字典解码：
+
+```sh
+./build/baremetal/examples/example_minimal | tee trace.hex
+xxd -r -p trace.hex trace.bin
+```
+
+在 PowerShell 中，下面的递归查找同时适用于 single-config 和 multi-config
+CMake generator：
+
+```powershell
+$example = Get-ChildItem .\build -Recurse -Filter example_minimal.exe | Select-Object -First 1
+$hex = ((& $example.FullName) -join '') -replace '\s', ''
+$bytes = for ($i = 0; $i -lt $hex.Length; $i += 2) { [Convert]::ToByte($hex.Substring($i, 2), 16) }
+[IO.File]::WriteAllBytes((Join-Path $PWD 'trace.bin'), [byte[]]$bytes)
+```
+
+在隔离的 Python 环境中安装主机工具（需要 Python 3.12 或更新版本），避免
+修改受 PEP 668 保护的系统解释器：
+
+```sh
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install ./tool
+# 可选的 YAML 事件源支持：
+python -m pip install "./tool[yaml]"
+```
+
+PowerShell 使用同一个隔离环境：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install .\tool
+```
+
+也可以使用锁定的 `uv sync --project tool`；随后用
+`uv run --project tool axiom-decoder trace.bin --format raw` 执行命令。
+
+现在无需字典即可结构化解码二进制 trace：
 
 ```sh
 axiom-decoder trace.bin --format raw
@@ -100,7 +138,15 @@ cmake -S . -B build-cortex-m -DAXIOM_PLATFORM=cortex-m \
   -DAXIOM_BUILD_TESTS=OFF -DAXIOM_BUILD_EXAMPLES=OFF
 ```
 
-`AXIOM_SOC` 与 `AXIOM_BOARD` 不再是顶层选项。依赖 SDK 的适配分别位于 `baremetal/ports/stm32`、`baremetal/ports/nrf52` 和 `baremetal/ports/esp32`，具体依赖边界见[移植指南](docs/reference/porting_guide.md)。
+`AXIOM_SOC` 与 `AXIOM_BOARD` 不再是顶层选项。`baremetal/ports/stm32`、
+`baremetal/ports/nrf52` 和 `baremetal/ports/esp32` 现在只是 reference map，
+不编译通用硬件驱动。请将[自定义 Port/Backend skeleton](baremetal/examples/example_custom_port.c)
+复制到固件，再参阅[移植指南](docs/reference/porting_guide.md)了解依赖边界。
+
+架构 Port 从硬件 cycle counter 取时。通过 `-DAXIOM_CPU_HZ=<hz>` 配置真实
+主频后才会上报微秒；未配置时返回零，避免把 CPU 周期误标为时间。若应用或
+厂商包完整提供 Port API，请配置 `-DAXIOM_PORT_SOURCE=NONE`；
+`AXIOM_EXTERNAL_PORT=ON` 仅作为已弃用的兼容别名。
 
 ## 资源预设
 
@@ -123,6 +169,8 @@ ARM GNU MinSizeRel 发布预算为 Tiny RAM ≤512 B、Prod ≤1.5 KiB、Field �
 - [Backend 契约](spec/backend_contract_zh.md)
 - [Fault Capsule](spec/fault_capsule_zh.md)
 - [工具链设计](spec/toolchain_ecosystem_design_zh.md)
+- [Decoder 协议](spec/decoder_protocol_zh.md)
+- [Event Dictionary](spec/event_dictionary_zh.md)
 - [移植指南](docs/reference/porting_guide.md)
 - [变更日志](docs/changelog/CHANGELOG_zh.md)
 

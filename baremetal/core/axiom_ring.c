@@ -145,13 +145,13 @@ uint16_t axiom_ring_read(axiom_ring_t *ring, uint8_t *out, uint16_t max_len) {
     return n;
 }
 
-uint16_t axiom_ring_peek(const axiom_ring_t *ring, uint8_t *out, uint16_t max_len) {
-    if (!out || max_len == 0) return 0;
-
-    axiom_port_critical_enter();
-
+static uint16_t ring_peek_locked(const axiom_ring_t *ring, uint8_t *out,
+                                 uint16_t max_len, uint32_t *tail_snapshot) {
     uint32_t head = ring->head;
     uint32_t tail = ring->tail;
+    if (tail_snapshot) {
+        *tail_snapshot = tail;
+    }
     uint32_t mask = ring->mask;
     uint32_t avail = head - tail;
     uint16_t n = (avail < max_len) ? (uint16_t)avail : max_len;
@@ -167,8 +167,40 @@ uint16_t axiom_ring_peek(const axiom_ring_t *ring, uint8_t *out, uint16_t max_le
         memcpy(out + first, buf, n - first);
     }
 
+    return n;
+}
+
+uint16_t axiom_ring_peek(const axiom_ring_t *ring, uint8_t *out, uint16_t max_len) {
+    if (!ring || !out || max_len == 0) return 0;
+
+    axiom_port_critical_enter();
+    uint16_t n = ring_peek_locked(ring, out, max_len, NULL);
     axiom_port_critical_exit();
     return n;
+}
+
+uint16_t axiom_ring_peek_snapshot(const axiom_ring_t *ring, uint8_t *out,
+                                  uint16_t max_len, uint32_t *tail_snapshot) {
+    if (!ring || !out || max_len == 0 || !tail_snapshot) return 0;
+
+    axiom_port_critical_enter();
+    uint16_t n = ring_peek_locked(ring, out, max_len, tail_snapshot);
+    axiom_port_critical_exit();
+    return n;
+}
+
+bool axiom_ring_consume_if(axiom_ring_t *ring, uint32_t tail_snapshot, uint16_t n) {
+    if (!ring || n == 0u) return false;
+
+    axiom_port_critical_enter();
+    uint32_t tail = ring->tail;
+    uint32_t available = ring->head - tail;
+    bool can_consume = tail == tail_snapshot && (uint32_t)n <= available;
+    if (can_consume) {
+        ring->tail = tail + n;
+    }
+    axiom_port_critical_exit();
+    return can_consume;
 }
 
 void axiom_ring_consume(axiom_ring_t *ring, uint16_t n) {
