@@ -22,10 +22,9 @@ if(AXIOM_PLATFORM STREQUAL "cortex-m")
     endif()
 endif()
 
-# Backend recovery compares a monotonic microsecond timestamp.  Architecture
-# ports return zero when AXIOM_CPU_HZ is not configured, so reject this unsafe
-# combination during configuration instead of allowing a permanently disabled
-# backend at runtime.  Host builds intentionally use their simulated clock.
+# Backend recovery compares a monotonic microsecond timestamp.  Track whether
+# it is enabled now; the selected provider is validated below once CMake knows
+# whether it is a built-in architecture port or a custom/external provider.
 set(_AXIOM_BACKEND_DEGRADATION_ENABLED FALSE)
 if(DEFINED AXIOM_BACKEND_DEGRADATION AND AXIOM_BACKEND_DEGRADATION)
     set(_AXIOM_BACKEND_DEGRADATION_ENABLED TRUE)
@@ -35,13 +34,6 @@ if(DEFINED AXIOM_PRESET_${_AXIOM_PORT_PRESET}_BACKEND_DEGRADATION AND
    AXIOM_PRESET_${_AXIOM_PORT_PRESET}_BACKEND_DEGRADATION)
     set(_AXIOM_BACKEND_DEGRADATION_ENABLED TRUE)
 endif()
-if(AXIOM_PLATFORM MATCHES "^(cortex-m|riscv)$" AND
-   AXIOM_CPU_HZ STREQUAL "0" AND _AXIOM_BACKEND_DEGRADATION_ENABLED)
-    message(FATAL_ERROR
-        "AXIOM_BACKEND_DEGRADATION requires a non-zero AXIOM_CPU_HZ "
-        "for architecture ports")
-endif()
-
 # The core library deliberately has no port object.  Keep the selected port
 # as an independent provider so consumers must choose the hardware contract
 # explicitly at their final link step.
@@ -49,6 +41,7 @@ unset(AXIOM_PORT_SOURCES)
 unset(AXIOM_PORT_SOURCES CACHE)
 unset(AXIOM_PORT_PROVIDER_SOURCES)
 unset(AXIOM_PORT_PROVIDER_TARGET)
+set(_AXIOM_USING_DEFAULT_ARCH_PORT FALSE)
 
 set(AXIOM_PORT_GENERIC_SOURCE
     "${AXIOM_PORTS_DIR}/generic/axiom_port_generic.c")
@@ -94,9 +87,11 @@ elseif(NOT AXIOM_PORT_SOURCE)
     if(AXIOM_PLATFORM STREQUAL "cortex-m")
         set(_AXIOM_DEFAULT_PORT_SOURCE
             "${AXIOM_PORTS_DIR}/arch/cortex-m/axiom_port_cortex_m.c")
+        set(_AXIOM_USING_DEFAULT_ARCH_PORT TRUE)
     elseif(AXIOM_PLATFORM STREQUAL "riscv")
         set(_AXIOM_DEFAULT_PORT_SOURCE
             "${AXIOM_PORTS_DIR}/arch/riscv/axiom_port_riscv.c")
+        set(_AXIOM_USING_DEFAULT_ARCH_PORT TRUE)
     else()
         set(_AXIOM_DEFAULT_PORT_SOURCE
             "${AXIOM_PORTS_DIR}/generic/axiom_port_generic.c")
@@ -104,6 +99,24 @@ elseif(NOT AXIOM_PORT_SOURCE)
     set(AXIOM_PORT_PROVIDER_SOURCES "${_AXIOM_DEFAULT_PORT_SOURCE}")
 else()
     set(AXIOM_PORT_PROVIDER_SOURCES ${AXIOM_PORT_SOURCE})
+endif()
+
+# The built-in architecture providers need their hardware counter configured
+# for degradation recovery.  Custom and external providers are exempt because
+# they may supply an independent monotonic timestamp implementation.
+if(_AXIOM_BACKEND_DEGRADATION_ENABLED AND _AXIOM_USING_DEFAULT_ARCH_PORT)
+    if(AXIOM_CPU_HZ STREQUAL "0")
+        message(FATAL_ERROR
+            "AXIOM_BACKEND_DEGRADATION with the built-in ${AXIOM_PLATFORM} "
+            "port requires a non-zero AXIOM_CPU_HZ")
+    endif()
+    if(AXIOM_PLATFORM STREQUAL "cortex-m" AND
+       NOT AXIOM_CORTEX_M_HAS_DWT STREQUAL "1")
+        message(FATAL_ERROR
+            "AXIOM_BACKEND_DEGRADATION with the built-in Cortex-M port "
+            "requires AXIOM_CORTEX_M_HAS_DWT=1, or a custom/external port "
+            "with a monotonic timestamp")
+    endif()
 endif()
 
 # Validate and materialize the optional provider target.  A single generic
@@ -162,3 +175,4 @@ unset(AXIOM_PORT_PROVIDER_SOURCES)
 unset(AXIOM_PORT_PROVIDER_TARGET)
 unset(_AXIOM_BACKEND_DEGRADATION_ENABLED)
 unset(_AXIOM_PORT_PRESET)
+unset(_AXIOM_USING_DEFAULT_ARCH_PORT)
