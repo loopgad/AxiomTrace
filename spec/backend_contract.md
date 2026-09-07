@@ -49,7 +49,7 @@ typedef struct {
 | `write`      | `int (*)(...)` | Yes | Transmit a complete frame. Must be IRQ-safe or called from critical section. Return 0 on success, `-EAGAIN` if busy, negative on error. |
 | `ready`      | `int (*)(void*)` | No | Return non-zero if backend can accept data. Called before `write` to avoid unnecessary drop. |
 | `flush`      | `int (*)(void*)` | No | Drain any internal buffers. Called explicitly by user or during shutdown. |
-| `panic_write`| `int (*)(...)` | No | Fallback write used in fault/crash contexts. Must be as simple as possible (e.g., polled UART byte out). If NULL, `write` is used instead. |
+| `panic_write`| `int (*)(...)` | No | Fallback write used only when application/integration code explicitly calls `axiom_backend_panic_write()`. It must be as simple as possible (e.g., polled UART byte out). If NULL, that explicit API falls back to `write`; Core does not invoke it automatically. |
 | `on_drop`    | `void (*)(...)` | No | Callback invoked when Core drops a frame intended for this backend. `lost` = number of consecutively dropped frames. |
 | `ctx`        | `void *` | No | User context pointer passed to all callbacks. |
 
@@ -96,7 +96,7 @@ The original integer return values (`0`, `-1`, `-2`, `-3`) are preserved for sou
    - For each registered backend, Core calls `ready()` (if non-NULL).
    - If ready, Core calls `write()` with the complete frame buffer.
    - If `write()` fails or `ready()` returns false, Core increments the public backend diagnostic and calls `on_drop()` (if non-NULL). This is distinct from Core ingress `DROP_SUMMARY` accounting.
-3. **Fault-time**: If a fault occurs, Core attempts `panic_write()` on all backends that provide it.
+3. **Fault-time**: Core does not implicitly dispatch `panic_write()` when a fault event is emitted. Fault handling code may explicitly call `axiom_backend_panic_write(frame, len)`; that API attempts every registered backend and falls back to `write` when `panic_write` is NULL.
 4. **Flush**: Normal code calls `axiom_flush()` to drain the Core ring and then backend buffers. `axiom_backend_flush_all()` only invokes backend flush callbacks.
 
 ---

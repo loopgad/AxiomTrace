@@ -1,6 +1,6 @@
 # AxiomTrace Platform Reference
 
-> [English](platform_reference.md) | [简体中文](platform_reference.md)
+> [English](platform_reference.md) | 简体中文（本页合并）
 >
 > 版本: v1.0  |  状态: 现行（中英双语合并文档）
 
@@ -20,21 +20,29 @@
 
 ## 概述
 
-AxiomTrace 的平台抽象层 (Port Layer) 提供了硬件相关的弱符号实现，允许用户在不需要修改核心代码的情况下，将 AxiomTrace 移植到不同的硬件平台。
+AxiomTrace 的平台抽象层 (Port Layer) 区分 Host generic、架构默认
+provider 与消费方自定义 provider。仓库提供的 generic 和架构实现在
+编译器支持时使用 weak 符号，因此板级强符号可覆盖单个默认回调；
+完整自定义 Port 仍建议通过 `AXIOM_PORT_SOURCE=NONE` 显式选择。
 
 ### Port 接口设计原则
 
 - **零依赖**: Port 实现不依赖外部库 (如 HAL)
-- **弱符号覆盖**: 上层实现可覆盖下层弱符号实现
+- **Provider 边界**: 仓库默认回调可由板级强符号覆盖；完整自定义 Port 由消费方显式提供
 - **向后兼容**: 保持 `axiom_port.h` 接口不变
-- **ISR 安全**: 所有接口均为 ISR 安全设计
+- **上下文明确**: 时间戳与临界区接口服务于热路径；字符串、故障快照和 Flash 接口的 ISR 语义由集成方保证，Flash 擦写不得在 ISR 中执行
 
 ### 文件位置
 
 ```
 baremetal/port/
-  axiom_port.h           # 公共接口定义
-  axiom_port_generic.c   # 默认弱符号实现
+  axiom_port.h                         # 公共接口定义
+baremetal/ports/generic/
+  axiom_port_generic.c                 # Host/default provider
+baremetal/ports/arch/cortex-m/
+  axiom_port_cortex_m.c                # Cortex-M provider
+baremetal/ports/arch/riscv/
+  axiom_port_riscv.c                   # RISC-V provider
 ```
 
 ---
@@ -52,9 +60,9 @@ extern uint32_t axiom_port_timestamp(void);
 **返回值**: 微秒级时间戳，32位无符号整数，自然回绕
 
 **实现要求**:
-- 微秒级精度或更高
+- 微秒级精度或更高（如果配置 `AXIOM_CPU_HZ`，架构 Port 才能进行周期换算）
 - 自然回绕 (32位溢出)
-- ISR 安全 (无锁实现)
+- 热路径可安全调用；不得依赖阻塞锁
 
 **推荐实现**:
 - ARM Cortex-M: DWT_CYCCNT 寄存器
@@ -72,8 +80,7 @@ extern void axiom_port_critical_exit(void);
 
 **实现要求**:
 - 必须可嵌套 (配对调用)
-- ISR 安全
-- 禁止调度器 (如使用 RTOS)
+- 用于保护 Core 热路径共享状态；不得在其中调度或阻塞
 
 **推荐实现**:
 - ARM Cortex-M: PRIMASK 或 BASEPRI
@@ -90,7 +97,7 @@ extern void axiom_port_string_out(const char *str);
 
 **实现要求**:
 - 非阻塞
-- ISR 可调用
+- 只有在具体实现明确支持时才可从 ISR 调用
 - 目标设备: UART / RTT / SWO / ITM / stdout
 
 ### axiom_port_fault_hook()
@@ -131,32 +138,37 @@ extern uint8_t axiom_port_fault_snapshot(uint8_t *buf, uint8_t max_len);
 - R0-R3, R12, LR, PSR, PC
 - CONTROL, PRIMASK, BASEPRI
 
-### axiom_port_flash_erase() / axiom_port_flash_write()
+### axiom_port_flash_erase() / axiom_port_flash_write() / axiom_port_flash_read()
 
 Flash 操作函数，用于 Fault Capsule 存储。
 
 ```c
 extern int axiom_port_flash_erase(uint32_t addr, uint32_t len);
 extern int axiom_port_flash_write(uint32_t addr, const uint8_t *data, uint32_t len);
+extern int axiom_port_flash_read(uint32_t addr, uint8_t *out, uint32_t len);
 ```
 
-**返回值**: 0 成功, -1 失败
+**返回值**: 失败返回负数；Port 可以按目标驱动约定返回成功值。当前
+capsule 写入路径接受 `0` 或完整 `len` 作为成功。
 
 **要求**:
 - 非 ISR 调用
 - 擦除必须按页/扇区对齐
+- `AXIOM_CAPSULE_FLASH_BASE` 是回调收到的起始地址；读写偏移由 Core
+  加到该地址。Core 不管理 linker section 或分区占用，集成方必须保证该
+  `BASE/SIZE` 区域可擦除、不会与固件/其他数据重叠。
 
 ---
 
 ## 通用实现 (Generic)
 
-位置: `baremetal/port/axiom_port_generic.c`
+位置: `baremetal/ports/generic/axiom_port_generic.c`
 
 通用实现适用于主机环境和不需要特殊硬件功能的场景。
 
 ### 特性
 
-- 所有函数均为弱符号，可被覆盖
+- 在支持的 ELF 编译器上，generic 和架构默认函数为弱符号；Windows/PE 等不支持该属性的目标使用普通强符号默认值
 - 时间戳默认返回 0
 - 临界区为空操作
 - Flash 操作返回 -1 (不支持)
@@ -360,7 +372,10 @@ void axiom_port_string_out(const char *str) {
 
 #### 1. 创建 Port 源文件
 
-在 `baremetal/port/` 目录下创建 `axiom_port_<platform>.c`:
+新增架构时，在 `baremetal/ports/arch/<name>/` 下创建
+`axiom_port_<name>.c`，并在 `baremetal/ports/CMakeLists.txt` 增加明确的
+`AXIOM_PLATFORM` 分支。若应用已经完整提供 Port，则将源文件放在消费方
+工程中，使用 `AXIOM_PORT_SOURCE=NONE`，不要依赖 generic 默认值：
 
 ```c
 #include "axiom_port.h"
@@ -384,7 +399,7 @@ void axiom_port_string_out(const char *str) {
 }
 ```
 
-#### 2. 确保弱符号链接
+#### 2. 确保强符号 provider
 
 在 GCC/Clang 环境下，确保你的实现不使用 `__attribute__((weak))`:
 
@@ -403,10 +418,11 @@ __attribute__((weak)) uint32_t axiom_port_timestamp(void) {
 #### 3. 编译验证
 
 ```bash
-# 清理并重新构建
-rm -rf build
-cmake -B build -DAXIOM_PLATFORM=<your-platform>
-cmake --build build
+# Host/custom provider 的编译检查（架构目标请同时传入 toolchain file）
+cmake -S . -B build-custom -DAXIOM_PLATFORM=host \
+  -DAXIOM_PORT_SOURCE=/absolute/path/axiom_port_custom.c \
+  -DAXIOM_BUILD_TESTS=OFF
+cmake --build build-custom
 ```
 
 #### 4. 测试验证

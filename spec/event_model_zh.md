@@ -42,12 +42,14 @@ _Static_assert(_Alignof(axiom_event_header_t) == 1, "header align");
 |------|-----------|-----------------------------------------|---------------------------|
 | 0    | `DEBUG`   | 详细的诊断信息                          | 可丢弃，支持限速          |
 | 1    | `INFO`    | 常规运行事件                            | 默认输出级别              |
-| 2    | `WARN`    | 异常但可恢复的情况                      | 始终保留                  |
-| 3    | `ERROR`   | 可能会影响运行的故障                    | 始终保留                  |
-| 4    | `FAULT`   | 关键故障；触发 Fault Capsule 冻结       | 始终保留；调用 `axiom_port_fault_hook()` |
+| 2    | `WARN`    | 异常但可恢复的情况                      | 受 level mask 与 Core ring 策略约束 |
+| 3    | `ERROR`   | 可能会影响运行的故障                    | 受 level mask 与 Core ring 策略约束 |
+| 4    | `FAULT`   | 关键故障；启动已启用的 Fault Capsule 捕获 | 绕过 level/module mask；完整帧可组装时由 Core 保留，并调用 `axiom_port_fault_hook()` |
 | 5-15 | 保留      | 预留未来使用                            | —                         |
 
-**级别过滤**：一个 32 位的掩码控制哪些级别的事件可以被发出。在内存压力或限速情况下，`DEBUG` 级别可能会被丢弃。
+**级别过滤**：一个 32 位的掩码控制普通级别的事件可以被发出。`FAULT` 和固定的
+`DROP_SUMMARY` 系统事件绕过 level/module mask。普通事件仍可能因过滤或 Core ring
+压力而丢弃；只有启用 capsule 且帧到达 capsule observer 时才会写入故障舱的 RAM 捕获。
 
 ---
 

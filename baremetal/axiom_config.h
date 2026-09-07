@@ -329,4 +329,31 @@
 #define AXIOM_CAPSULE_MAX_IMAGE_SIZE \
     (21u + AXIOM_CAPSULE_MAX_SNAPSHOT_LEN + AXIOM_CAPSULE_RING_SIZE + 4u)
 
+#if AXIOM_CAPSULE_ENABLED
+/* Capsule state and the on-flash header use bounded integer fields.  Reject
+ * configurations that would truncate counters/lengths or make the byte ring
+ * arithmetic wrap before the runtime commit guard can run. */
+_Static_assert(AXIOM_CAPSULE_PRE_EVENTS >= 0u &&
+               AXIOM_CAPSULE_PRE_EVENTS <= UINT8_MAX,
+               "AXIOM_CAPSULE_PRE_EVENTS must fit uint8_t");
+_Static_assert(AXIOM_CAPSULE_POST_EVENTS >= 0u &&
+               AXIOM_CAPSULE_POST_EVENTS <= UINT8_MAX,
+               "AXIOM_CAPSULE_POST_EVENTS must fit uint8_t");
+_Static_assert(AXIOM_CAPSULE_MAX_SNAPSHOT_LEN > 0u &&
+               AXIOM_CAPSULE_MAX_SNAPSHOT_LEN <= UINT8_MAX,
+               "AXIOM_CAPSULE_MAX_SNAPSHOT_LEN must fit uint8_t");
+_Static_assert(AXIOM_CAPSULE_RING_SIZE > 0u &&
+               AXIOM_CAPSULE_RING_SIZE <= UINT16_MAX,
+               "AXIOM_CAPSULE_RING_SIZE must fit uint16_t");
+_Static_assert(AXIOM_CAPSULE_MAX_IMAGE_SIZE <= UINT16_MAX,
+               "AXIOM_CAPSULE_MAX_IMAGE_SIZE must fit capsule length");
+_Static_assert(AXIOM_CAPSULE_FLASH_BASE >= 0u &&
+               AXIOM_CAPSULE_FLASH_BASE <= UINT32_MAX &&
+               AXIOM_CAPSULE_FLASH_SIZE >= 0u &&
+               AXIOM_CAPSULE_FLASH_SIZE <= UINT32_MAX &&
+               AXIOM_CAPSULE_FLASH_BASE <=
+                   UINT32_MAX - AXIOM_CAPSULE_FLASH_SIZE,
+               "Capsule flash base and size must fit uint32_t address space");
+#endif
+
 #endif /* AXIOM_CONFIG_H */

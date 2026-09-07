@@ -101,6 +101,8 @@ typedef enum {
 #define AXIOM_SYSTEM_EVENT_DROP_SUMMARY 0x0001u
 #define AXIOM_SYSTEM_EVENT_METADATA_ID  0x0002u
 
+/* FAULT and DROP_SUMMARY are Core control records and bypass runtime filters. */
+
 /* Core emission lifecycle, shared with the frontend macros. */
 void axiom_write(axiom_level_t level, uint8_t module_id, uint16_t event_id,
                  const uint8_t *payload, uint8_t payload_len);

@@ -9,6 +9,39 @@
 
 set(AXIOM_PORTS_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
+# DWT/CYCCNT is not guaranteed by the Cortex-M architecture macro alone.
+# Keep the default safe (timestamp returns zero) and require the board build
+# to opt in after confirming the concrete core/SoC implements the counter.
+if(AXIOM_PLATFORM STREQUAL "cortex-m")
+    set(AXIOM_CORTEX_M_HAS_DWT "" CACHE STRING
+        "Set to 1 only when the selected Cortex-M core exposes DWT_CYCCNT")
+    if(AXIOM_CORTEX_M_HAS_DWT AND
+       NOT AXIOM_CORTEX_M_HAS_DWT MATCHES "^[01]$")
+        message(FATAL_ERROR
+            "AXIOM_CORTEX_M_HAS_DWT must be 0 or 1 when provided")
+    endif()
+endif()
+
+# Backend recovery compares a monotonic microsecond timestamp.  Architecture
+# ports return zero when AXIOM_CPU_HZ is not configured, so reject this unsafe
+# combination during configuration instead of allowing a permanently disabled
+# backend at runtime.  Host builds intentionally use their simulated clock.
+set(_AXIOM_BACKEND_DEGRADATION_ENABLED FALSE)
+if(DEFINED AXIOM_BACKEND_DEGRADATION AND AXIOM_BACKEND_DEGRADATION)
+    set(_AXIOM_BACKEND_DEGRADATION_ENABLED TRUE)
+endif()
+string(TOLOWER "${AXIOM_PRESET}" _AXIOM_PORT_PRESET)
+if(DEFINED AXIOM_PRESET_${_AXIOM_PORT_PRESET}_BACKEND_DEGRADATION AND
+   AXIOM_PRESET_${_AXIOM_PORT_PRESET}_BACKEND_DEGRADATION)
+    set(_AXIOM_BACKEND_DEGRADATION_ENABLED TRUE)
+endif()
+if(AXIOM_PLATFORM MATCHES "^(cortex-m|riscv)$" AND
+   AXIOM_CPU_HZ STREQUAL "0" AND _AXIOM_BACKEND_DEGRADATION_ENABLED)
+    message(FATAL_ERROR
+        "AXIOM_BACKEND_DEGRADATION requires a non-zero AXIOM_CPU_HZ "
+        "for architecture ports")
+endif()
+
 # The core library deliberately has no port object.  Keep the selected port
 # as an independent provider so consumers must choose the hardware contract
 # explicitly at their final link step.
@@ -103,6 +136,11 @@ if(AXIOM_PORT_PROVIDER_SOURCES)
             target_compile_definitions(axiomtrace_port PRIVATE
                 AXIOM_CPU_HZ=${AXIOM_CPU_HZ})
         endif()
+        if(AXIOM_PLATFORM STREQUAL "cortex-m" AND
+           AXIOM_CORTEX_M_HAS_DWT MATCHES "^[01]$")
+            target_compile_definitions(axiomtrace_port PRIVATE
+                AXIOM_CORTEX_M_HAS_DWT=${AXIOM_CORTEX_M_HAS_DWT})
+        endif()
     endif()
     set_target_properties(axiomtrace_port PROPERTIES EXPORT_NAME port)
     add_library(AxiomTrace::port ALIAS axiomtrace_port)
@@ -122,3 +160,5 @@ unset(AXIOM_PORTS_DIR)
 unset(AXIOM_PORT_GENERIC_SOURCE)
 unset(AXIOM_PORT_PROVIDER_SOURCES)
 unset(AXIOM_PORT_PROVIDER_TARGET)
+unset(_AXIOM_BACKEND_DEGRADATION_ENABLED)
+unset(_AXIOM_PORT_PRESET)

@@ -8,7 +8,8 @@ AxiomTrace 是面向裸机 C 固件的、有明确资源上界、无动态分配
 
 - C11 `AX_EVT`、`AX_LOG`、`AX_PROBE`、`AX_FAULT`、`AX_KV` 前端。
 - 带 CRC 的 Wire v2 帧、过滤、丢失诊断、Memory 与 Deferred Backend。
-- Capsule v1 的故障前/故障/故障后捕获，以及显式分段 Flash 提交。
+- Capsule v1 的故障前/故障/故障后 RAM 捕获（启用后），以及通过 Port
+  callback 显式、由用户调用的 Flash 提交。
 - 模块化 CMake 库和生成的 `axiomtrace.h` 单头文件制品。
 - 无元数据 raw 解码；可选 JSON/X-Macro 字典、codegen、metadata identity 与 bundle 工作流。
 
@@ -51,7 +52,7 @@ int main(void) {
 }
 ```
 
-自行提供 `axiom_port_*` 时，在实现 TU 定义 `AXIOMTRACE_NO_DEFAULT_PORT`；否则单头文件包含 generic weak defaults。
+自行提供 `axiom_port_*` 时，在实现 TU 定义 `AXIOMTRACE_NO_DEFAULT_PORT`；否则单头文件包含 generic 默认实现（编译器支持时使用 weak 符号）。
 
 仓库示例会以十六进制打印一个完整帧：
 
@@ -124,8 +125,16 @@ cmake --install build --prefix install
 
 ```cmake
 find_package(AxiomTrace 1.0 CONFIG REQUIRED)
-target_link_libraries(firmware PRIVATE AxiomTrace::axiomtrace)
+target_link_libraries(firmware PRIVATE
+    AxiomTrace::axiomtrace
+    AxiomTrace::port)
 ```
+
+`AxiomTrace::axiomtrace` 只有 core，不提供 `axiom_port_*` 符号。
+`AxiomTrace::port` 是构建该安装包时选择的 Port provider（Host 包还导出
+`AxiomTrace::port_generic`）。如果消费方通过 `AXIOM_PORT_SOURCE=NONE`
+自行提供完整 Port，则省略该 provider target，改为链接固件自己的 Port
+实现；`find_package` 不会自动发现厂商 SDK。
 
 AxiomTrace 作为子项目时，tests 与 examples 默认关闭。普通固件构建不依赖 Python、YAML、codegen 或 bundle。
 
@@ -134,9 +143,15 @@ AxiomTrace 作为子项目时，tests 与 examples 默认关闭。普通固件�
 顶层构建只选择架构级 Port：
 
 ```sh
-cmake -S . -B build-cortex-m -DAXIOM_PLATFORM=cortex-m \
+cmake -S . -B build-cortex-m -G Ninja \
+  -DAXIOM_PLATFORM=cortex-m \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/arm-toolchain.cmake \
   -DAXIOM_BUILD_TESTS=OFF -DAXIOM_BUILD_EXAMPLES=OFF
 ```
+
+这是仅编译的 reference 构建。工具链文件必须选择 ARM GNU（或其他兼容
+ARM 的编译器）；Host 编译器无法汇编 Cortex-M Port 中的 ARM 指令。该命令
+不会配置具体 SoC、板卡、链接脚本或厂商 SDK。
 
 `AXIOM_SOC` 与 `AXIOM_BOARD` 不再是顶层选项。`baremetal/ports/stm32`、
 `baremetal/ports/nrf52` 和 `baremetal/ports/esp32` 现在只是 reference map，
@@ -145,7 +160,9 @@ cmake -S . -B build-cortex-m -DAXIOM_PLATFORM=cortex-m \
 
 架构 Port 从硬件 cycle counter 取时。通过 `-DAXIOM_CPU_HZ=<hz>` 配置真实
 主频后才会上报微秒；未配置时返回零，避免把 CPU 周期误标为时间。若应用或
-厂商包完整提供 Port API，请配置 `-DAXIOM_PORT_SOURCE=NONE`；
+Cortex-M 构建还必须在确认具体 SoC 实现 `DWT_CYCCNT` 后才设置
+`-DAXIOM_CORTEX_M_HAS_DWT=1`；安全默认值为关闭。若应用或厂商包完整提供 Port API，
+请配置 `-DAXIOM_PORT_SOURCE=NONE`；
 `AXIOM_EXTERNAL_PORT=ON` 仅作为已弃用的兼容别名。
 
 ## 资源预设

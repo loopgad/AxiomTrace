@@ -56,6 +56,33 @@ add_executable(test_capsule test_capsule.c)
 target_link_libraries(test_capsule PRIVATE axiomtrace)
 add_test(NAME test_capsule COMMAND test_capsule)
 
+# Exercise the commit guard with a valid but intentionally undersized custom
+# flash region.  The production presets retain their existing 8192-byte area;
+# this target proves an oversized RAM capsule is rejected before erase/write.
+add_library(axiomtrace_capsule_small STATIC ${AXIOM_CORE_SOURCES})
+target_compile_features(axiomtrace_capsule_small PUBLIC c_std_11)
+target_include_directories(axiomtrace_capsule_small PUBLIC
+    ${CMAKE_SOURCE_DIR}/baremetal
+    ${CMAKE_SOURCE_DIR}/baremetal/include
+    ${CMAKE_SOURCE_DIR}/baremetal/port
+    ${CMAKE_SOURCE_DIR}/baremetal/core
+    ${CMAKE_SOURCE_DIR}/baremetal/frontend
+    ${CMAKE_SOURCE_DIR}/baremetal/backend)
+target_compile_definitions(axiomtrace_capsule_small PUBLIC
+    AXIOM_PRESET=0
+    AXIOM_CAPSULE_ENABLED=1
+    AXIOM_CAPSULE_RING_SIZE=4096u
+    AXIOM_CAPSULE_FLASH_SIZE=2048u
+    AXIOM_CAPSULE_MAX_SNAPSHOT_LEN=64u
+    AXIOM_CAPSULE_PRE_EVENTS=32u
+    AXIOM_CAPSULE_POST_EVENTS=16u
+    AXIOM_MAX_PAYLOAD_LEN=128u
+    AXIOM_CAPSULE_SMALL_TEST=1
+    AXIOM_HOST_TESTING=1)
+add_executable(test_capsule_small test_capsule.c)
+target_link_libraries(test_capsule_small PRIVATE axiomtrace_capsule_small)
+add_test(NAME test_capsule_small COMMAND test_capsule_small)
+
 add_executable(test_dynamic_call_chain test_dynamic_call_chain.c)
 target_link_libraries(test_dynamic_call_chain PRIVATE axiomtrace)
 add_test(NAME test_dynamic_call_chain COMMAND test_dynamic_call_chain)

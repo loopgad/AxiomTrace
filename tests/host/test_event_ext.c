@@ -161,7 +161,30 @@ static void test_filter_mask(void) {
     axiom_level_mask_set(0xFFFFFFFFu);
 }
 
-/* ---- Test 6: Multiple flush cycles ---- */
+/* ---- Test 6: System DROP_SUMMARY bypasses application filters ---- */
+static void test_system_drop_summary_bypasses_filters(void) {
+    axiom_init();
+    dispatch_count = 0;
+    drop_summary_lost = 0u;
+    drop_summary_count = 0;
+
+    /* Keep one ordinary INFO/module event enabled, but mask WARN and the
+     * system module. The recovery summary must still be emitted. */
+    axiom_level_mask_set(1u << AXIOM_LEVEL_INFO);
+    axiom_module_mask_set(1u << 0x01u);
+    axiom_write(AXIOM_LEVEL_DEBUG, 0x01u, 0x0110u, NULL, 0u);
+    axiom_write(AXIOM_LEVEL_INFO, 0x01u, 0x0111u, NULL, 0u);
+    axiom_flush();
+
+    CHECK("system summary: ordinary event plus summary dispatched", dispatch_count == 2);
+    CHECK("system summary: summary survives level/module masks", drop_summary_count == 1);
+    CHECK("system summary: lost count", drop_summary_lost == 1u);
+
+    axiom_level_mask_set(0xFFFFFFFFu);
+    axiom_module_mask_set(0xFFFFFFFFu);
+}
+
+/* ---- Test 7: Multiple flush cycles ---- */
 static void test_multi_flush(void) {
     dispatch_count = 0;
     for (int i = 0; i < 5; i++) {
@@ -171,14 +194,14 @@ static void test_multi_flush(void) {
     CHECK("multi_flush: 5 events dispatched", dispatch_count >= 5);
 }
 
-/* ---- Test 7: Flush on empty ring does nothing ---- */
+/* ---- Test 8: Flush on empty ring does nothing ---- */
 static void test_flush_empty(void) {
     dispatch_count = 0;
     axiom_flush();
     CHECK("flush_empty: no dispatch", dispatch_count == 0);
 }
 
-/* ---- Test 8: Ring pressure reports one accurate recovery summary ---- */
+/* ---- Test 9: Ring pressure reports one accurate recovery summary ---- */
 static void test_ring_full_drop_summary(void) {
     uint8_t payload[AXIOM_MAX_PAYLOAD_LEN] = {0};
     axiom_init();
@@ -200,7 +223,7 @@ static void test_ring_full_drop_summary(void) {
     CHECK("ring_full: summary count accurate", drop_summary_lost == diagnostics.ring_full);
 }
 
-/* ---- Test 9: Timestamp VLE compression & overflow / abrupt jumps ---- */
+/* ---- Test 10: Timestamp VLE compression & overflow / abrupt jumps ---- */
 static void test_timestamp_vle_overflow_and_abrupt_jumps(void) {
     axiom_timestamp_ctx_t ctx;
     axiom_timestamp_init(&ctx);
@@ -235,13 +258,14 @@ int main(void) {
     test_write_with_payload();
     test_invalid_level();
     test_filter_mask();
+    test_system_drop_summary_bypasses_filters();
     test_multi_flush();
     test_flush_empty();
     test_ring_full_drop_summary();
     test_timestamp_vle_overflow_and_abrupt_jumps();
 
     if (failures == 0) {
-        printf("test_event_ext: PASSED (8 test groups)\n");
+        printf("test_event_ext: PASSED (10 test groups)\n");
     } else {
         printf("test_event_ext: FAILED (%d failures)\n", failures);
     }

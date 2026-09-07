@@ -82,6 +82,18 @@ static uint32_t capsule_total_len(void) {
         (uint32_t)s_frame_used + AXIOM_CAPSULE_CRC_LEN;
 }
 
+static bool capsule_flash_range_valid(uint32_t offset, uint32_t len) {
+    const uint32_t base = (uint32_t)AXIOM_CAPSULE_FLASH_BASE;
+    const uint32_t size = (uint32_t)AXIOM_CAPSULE_FLASH_SIZE;
+    if (len == 0u || offset > size || len > size - offset) {
+        return false;
+    }
+    if (base > UINT32_MAX - offset) {
+        return false;
+    }
+    return len <= UINT32_MAX - (base + offset);
+}
+
 static bool capsule_ram_available(void) {
     return s_state != AXIOM_CAPSULE_STATE_IDLE && s_post_window_count > 0u;
 }
@@ -186,7 +198,11 @@ static bool append_post_frame(const uint8_t *frame, uint16_t len) {
 }
 
 static bool flash_write_exact(uint32_t offset, const uint8_t *data, uint32_t len) {
-    int result = axiom_port_flash_write(AXIOM_CAPSULE_FLASH_BASE + offset, data, len);
+    if (!capsule_flash_range_valid(offset, len)) {
+        return false;
+    }
+    int result = axiom_port_flash_write(
+        (uint32_t)AXIOM_CAPSULE_FLASH_BASE + offset, data, len);
     return result == 0 || result == (int)len;
 }
 
@@ -210,7 +226,8 @@ static bool capsule_write_frames(uint32_t *offset, uint32_t *crc) {
 }
 
 static bool flash_capsule_header(uint8_t header[AXIOM_CAPSULE_HEADER_LEN], uint16_t *len) {
-    if (axiom_port_flash_read(AXIOM_CAPSULE_FLASH_BASE, header,
+    if (!capsule_flash_range_valid(0u, AXIOM_CAPSULE_HEADER_LEN) ||
+        axiom_port_flash_read((uint32_t)AXIOM_CAPSULE_FLASH_BASE, header,
                               AXIOM_CAPSULE_HEADER_LEN) < 0 ||
         header[0] != AXIOM_CAPSULE_MAGIC_A || header[1] != AXIOM_CAPSULE_MAGIC_X ||
         header[2] != AXIOM_CAPSULE_MAGIC_C || header[3] != AXIOM_CAPSULE_MAGIC_P ||
@@ -229,6 +246,9 @@ static bool flash_capsule_valid(uint16_t *valid_len) {
     if (!flash_capsule_header(header, &len)) {
         return false;
     }
+    if (!capsule_flash_range_valid(0u, len)) {
+        return false;
+    }
     uint32_t data_len = (uint32_t)len - AXIOM_CAPSULE_CRC_LEN;
     uint32_t offset = 0u;
     uint32_t crc = 0xFFFFFFFFu;
@@ -237,14 +257,17 @@ static bool flash_capsule_valid(uint16_t *valid_len) {
         if (amount > sizeof(chunk)) {
             amount = sizeof(chunk);
         }
-        if (axiom_port_flash_read(AXIOM_CAPSULE_FLASH_BASE + offset, chunk, amount) < 0) {
+        if (axiom_port_flash_read(
+                (uint32_t)AXIOM_CAPSULE_FLASH_BASE + offset, chunk, amount) < 0) {
             return false;
         }
         crc = capsule_crc32_update(crc, chunk, amount);
         offset += amount;
     }
-    if (axiom_port_flash_read(AXIOM_CAPSULE_FLASH_BASE + data_len, chunk,
-                              AXIOM_CAPSULE_CRC_LEN) < 0 ||
+    if (!capsule_flash_range_valid(data_len, AXIOM_CAPSULE_CRC_LEN) ||
+        axiom_port_flash_read(
+            (uint32_t)AXIOM_CAPSULE_FLASH_BASE + data_len, chunk,
+            AXIOM_CAPSULE_CRC_LEN) < 0 ||
         ~crc != capsule_read_u32_le(chunk)) {
         return false;
     }
@@ -320,8 +343,12 @@ bool axiom_capsule_commit(void) {
     uint32_t total = capsule_total_len();
     uint32_t offset = 0u;
     uint32_t crc = 0xFFFFFFFFu;
-    if (!capsule_ram_available() || total > AXIOM_CAPSULE_MAX_IMAGE_SIZE || total > 0xFFFFu ||
-        axiom_port_flash_erase(AXIOM_CAPSULE_FLASH_BASE, AXIOM_CAPSULE_FLASH_SIZE) < 0) {
+    /* Validate the complete image and address range before destructive erase. */
+    if (!capsule_ram_available() || total > AXIOM_CAPSULE_MAX_IMAGE_SIZE ||
+        total > 0xFFFFu || total > (uint32_t)AXIOM_CAPSULE_FLASH_SIZE ||
+        !capsule_flash_range_valid(0u, (uint32_t)AXIOM_CAPSULE_FLASH_SIZE) ||
+        axiom_port_flash_erase((uint32_t)AXIOM_CAPSULE_FLASH_BASE,
+                               (uint32_t)AXIOM_CAPSULE_FLASH_SIZE) < 0) {
         return false;
     }
     capsule_build_header(header);
@@ -360,7 +387,8 @@ uint32_t axiom_capsule_read(uint8_t *out, uint32_t max_len) {
     }
     uint16_t len = 0u;
     if (!flash_capsule_valid(&len) || len > max_len ||
-        axiom_port_flash_read(AXIOM_CAPSULE_FLASH_BASE, out, len) < 0) {
+        !capsule_flash_range_valid(0u, len) ||
+        axiom_port_flash_read((uint32_t)AXIOM_CAPSULE_FLASH_BASE, out, len) < 0) {
         return 0u;
     }
     return len;
@@ -368,7 +396,10 @@ uint32_t axiom_capsule_read(uint8_t *out, uint32_t max_len) {
 
 void axiom_capsule_clear(void) {
     axiom_capsule_init();
-    (void)axiom_port_flash_erase(AXIOM_CAPSULE_FLASH_BASE, AXIOM_CAPSULE_FLASH_SIZE);
+    if (capsule_flash_range_valid(0u, (uint32_t)AXIOM_CAPSULE_FLASH_SIZE)) {
+        (void)axiom_port_flash_erase((uint32_t)AXIOM_CAPSULE_FLASH_BASE,
+                                     (uint32_t)AXIOM_CAPSULE_FLASH_SIZE);
+    }
 }
 
 #else

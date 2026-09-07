@@ -8,9 +8,16 @@
 
 ## 1. 概念
 
-**Fault Capsule (故障舱)** 是用于事后分析的持久化快照格式。v1.0 中，`AX_FAULT` 会发出 fault-level Event Record、调用 `axiom_port_fault_hook()`、冻结保留的故障前窗口、捕获故障后窗口，并允许用户代码将 capsule v1 镜像流式提交到配置的 Flash 区域。
+**Fault Capsule（故障舱）** 是用于事后分析的持久化快照格式。当
+`AXIOM_CAPSULE_ENABLED` 非零且有效的 `AX_FAULT` 到达 Core 时，fault-level
+Event Record 会调用 `axiom_port_fault_hook()`，冻结当前已保留的故障前窗口，
+并在 RAM 中捕获故障后窗口。应用或 Port 集成代码必须显式调用
+`axiom_capsule_commit()`，才能将 capsule v1 镜像流式提交到配置的 Flash
+区域；该路径不会隐式分发 Backend 的 `panic_write()`。
 
-**核心规则**：在系统正常运行时，Flash 写入量为 **零**。只有在触发故障后，在非 ISR 上下文调用 `axiom_capsule_commit()` 时才会触碰 Flash。
+**核心规则**：正常捕获路径对 Flash 的写入量为 **零**。触发故障后显式调用
+非 ISR 的 `axiom_capsule_commit()`，或另行显式调用 `axiom_capsule_clear()`
+擦除时，才会触碰 Flash。Core 不会为故障舱预留或映射硬件 Flash 分区。
 
 ---
 
@@ -101,6 +108,9 @@
 
 ## 5. 目标配置 (Target Configuration)
 
+下面的数值是 `axiom_config.h` 中的 fallback 定义。Resource preset 可能会
+覆盖它们；特别是 `tiny` 与 `prod` 默认关闭 capsule 捕获，集成方需显式启用。
+
 ```c
 #ifndef AXIOM_CAPSULE_ENABLED
 #define AXIOM_CAPSULE_ENABLED 1
@@ -144,7 +154,11 @@
 - `AXIOM_CAPSULE_PRE_EVENTS`：故障前保留的事件数量。
 - `AXIOM_CAPSULE_POST_EVENTS`：故障后保留的事件数量。
 - `AXIOM_CAPSULE_RING_SIZE`：捕获 Event Record 流使用的最大字节数。
-- `AXIOM_CAPSULE_FLASH_BASE` / `AXIOM_CAPSULE_FLASH_SIZE`：commit/read/clear 使用的 Port 侧 Flash 区域。
+- `AXIOM_CAPSULE_FLASH_BASE` / `AXIOM_CAPSULE_FLASH_SIZE`：传给 Port Flash
+  callback 的地址与擦除长度。Core 对 capsule I/O 使用 `BASE + offset`，不会
+  根据 linker layout 预留、映射或校验该地址。集成方必须选择不与其他数据
+  重叠的可擦除区域，满足芯片对齐/保护规则并实现这些 callback。上面的
+  `0` / `8192` 只是编译期 fallback，不代表硬件已分配对应分区。
 
 ---
 
@@ -164,7 +178,7 @@ uint32_t axiom_capsule_read(uint8_t *out, uint32_t max_len);
 void axiom_capsule_clear(void);
 ```
 
-`axiom_capsule_read()` 直接在调用者缓冲区合成既有 capsule v1 镜像，不保留第二份完整 RAM image。`axiom_capsule_present()` 使用固定 64 字节 scratch 流式校验 Flash。两条 Flash 路径都校验 magic、编码长度与 CRC-32；提交失败时，保留的帧环仍可读取。
+`axiom_capsule_read()` 直接在调用者缓冲区合成既有 capsule v1 镜像，不保留第二份完整 RAM image。`axiom_capsule_present()` 使用固定 64 字节 scratch 流式校验 Flash。两条 Flash 路径都校验 magic、编码长度与 CRC-32；提交失败时，保留的帧环仍可重试或读取检查。
 
 ---
 

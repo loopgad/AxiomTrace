@@ -161,9 +161,11 @@ def _render(frames, output_format, dictionary, metadata_id, source_map):
               help="Location metadata mode represented by generated assets.")
 @click.option("--location-function", is_flag=True,
               help="Include function hashes in hash-mode metadata identity.")
+@click.option("--max-payload-len", type=click.IntRange(min=1, max=255), default=128, show_default=True,
+              help="Maximum event payload bytes accepted by codegen.")
 @click.option("--check", is_flag=True, help="Validate only; do not write generated files.")
 @_click_error_boundary
-def codegen_main(events, out, source_id_map, location_mode, location_function, check):
+def codegen_main(events, out, source_id_map, location_mode, location_function, max_payload_len, check):
     """Generate C headers and dictionary.json from event definitions."""
     generated = generate_assets(
         events,
@@ -172,6 +174,7 @@ def codegen_main(events, out, source_id_map, location_mode, location_function, c
         source_id_map=source_id_map,
         location_mode=location_mode,
         location_function=location_function,
+        max_payload_len=max_payload_len,
     )
     if check:
         echo_success("AxiomTrace codegen check passed")
@@ -204,10 +207,12 @@ def bundle_main():
               help="Location mode; inferred from sources when omitted.")
 @click.option("--location-function", is_flag=True,
               help="Include function hashes in hash-mode metadata identity.")
+@click.option("--max-payload-len", type=click.IntRange(min=1, max=255), default=128, show_default=True,
+              help="Maximum event payload bytes accepted by bundle generation.")
 @_click_error_boundary
 def bundle_generate(
     events, elf, map_file, compile_db, source_id_map, out, firmware_name, firmware_version,
-    location_mode, location_function,
+    location_mode, location_function, max_payload_len,
 ):
     """Generate a standard axiomtrace-bundle."""
     generated = generate_bundle(
@@ -221,6 +226,7 @@ def bundle_generate(
         firmware_version=firmware_version,
         location_mode=location_mode,
         location_function=location_function,
+        max_payload_len=max_payload_len,
     )
     for name, path in generated.items():
         echo_success(f"Bundled {name}: {path}")

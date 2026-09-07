@@ -8,7 +8,8 @@ AxiomTrace is a bounded, allocation-free Wire v2 event recorder for bare-metal C
 
 - C11 `AX_EVT`, `AX_LOG`, `AX_PROBE`, `AX_FAULT`, and `AX_KV` frontends.
 - CRC-protected Wire v2 frames, filtering, drop diagnostics, Memory and Deferred backends.
-- Capsule v1 pre/fault/post capture with explicit, segmented Flash commit.
+- Capsule v1 pre/fault/post RAM capture when enabled, with an explicit,
+  user-invoked Flash commit through the Port callbacks.
 - Modular CMake library and generated `axiomtrace.h` single-header distribution.
 - Raw decoding without metadata; optional JSON/X-Macro dictionary, codegen, metadata identity, and bundle workflows.
 
@@ -51,7 +52,7 @@ int main(void) {
 }
 ```
 
-Define `AXIOMTRACE_NO_DEFAULT_PORT` in the implementation TU when supplying your own `axiom_port_*` functions. Otherwise the single header includes generic weak defaults.
+Define `AXIOMTRACE_NO_DEFAULT_PORT` in the implementation TU when supplying your own `axiom_port_*` functions. Otherwise the single header includes generic defaults (weak where the compiler supports weak symbols).
 
 The repository example prints one complete frame as hexadecimal:
 
@@ -125,8 +126,17 @@ Consumers may use either `add_subdirectory()` or an installed package:
 
 ```cmake
 find_package(AxiomTrace 1.0 CONFIG REQUIRED)
-target_link_libraries(firmware PRIVATE AxiomTrace::axiomtrace)
+target_link_libraries(firmware PRIVATE
+    AxiomTrace::axiomtrace
+    AxiomTrace::port)
 ```
+
+`AxiomTrace::axiomtrace` is the core only; it does not provide the
+`axiom_port_*` symbols. `AxiomTrace::port` is the provider selected when the
+package was built (the host package also exports `AxiomTrace::port_generic`).
+If the consuming firmware supplies a complete Port with
+`AXIOM_PORT_SOURCE=NONE`, omit that provider target and link the firmware's
+Port implementation instead. Vendor SDKs are not discovered by `find_package`.
 
 When AxiomTrace is a subproject, tests and examples default to off. Python, YAML parsing, codegen, and bundle generation are not required for a normal firmware build.
 
@@ -135,15 +145,24 @@ When AxiomTrace is a subproject, tests and examples default to off. Python, YAML
 The top-level build selects only an architecture port:
 
 ```sh
-cmake -S . -B build-cortex-m -DAXIOM_PLATFORM=cortex-m \
+cmake -S . -B build-cortex-m -G Ninja \
+  -DAXIOM_PLATFORM=cortex-m \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/arm-toolchain.cmake \
   -DAXIOM_BUILD_TESTS=OFF -DAXIOM_BUILD_EXAMPLES=OFF
 ```
+
+This is a compile-only reference build. The toolchain file must select an ARM
+GNU (or other ARM-compatible) compiler; a host compiler cannot assemble the
+Cortex-M Port's ARM instructions. It does not configure an SoC, board, linker
+script, or vendor SDK.
 
 `AXIOM_SOC` and `AXIOM_BOARD` are intentionally not top-level options. SDK-dependent integrations are separate reference maps under `baremetal/ports/stm32`, `baremetal/ports/nrf52`, and `baremetal/ports/esp32`; they do not compile universal hardware drivers. Copy the [custom Port/Backend skeleton](baremetal/examples/example_custom_port.c) into the firmware and see the [porting guide](docs/reference/porting_guide.md) for dependency boundaries.
 
 Architecture ports read hardware cycle counters. Set the real core clock with
 `-DAXIOM_CPU_HZ=<hz>` to expose microsecond timestamps; without it they return
-zero rather than mislabel CPU cycles as time. Use `-DAXIOM_PORT_SOURCE=NONE`
+zero rather than mislabel CPU cycles as time. Cortex-M builds must also set
+`-DAXIOM_CORTEX_M_HAS_DWT=1` only after confirming that the selected SoC
+implements `DWT_CYCCNT`; the safe default is disabled. Use `-DAXIOM_PORT_SOURCE=NONE`
 when the application or vendor package supplies the complete Port API;
 `AXIOM_EXTERNAL_PORT=ON` remains a deprecated compatibility alias.
 

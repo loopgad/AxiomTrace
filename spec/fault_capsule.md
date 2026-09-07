@@ -8,9 +8,18 @@
 
 ## 1. Concept
 
-A **Fault Capsule** is the persisted snapshot format for post-mortem analysis. In v1.0, `AX_FAULT` emits a normal fault-level Event Record, calls `axiom_port_fault_hook()`, freezes the retained pre-window, captures the post-window, and allows user code to stream the capsule v1 image to the configured Flash region.
+A **Fault Capsule** is the persisted snapshot format for post-mortem analysis. When
+`AXIOM_CAPSULE_ENABLED` is non-zero and a valid `AX_FAULT` reaches Core, the
+normal fault-level Event Record invokes `axiom_port_fault_hook()`, freezes the
+currently retained pre-window, and captures the post-window in RAM. Application
+or Port integration code must explicitly call `axiom_capsule_commit()` to stream
+the capsule v1 image to a configured Flash region; this path does not implicitly
+dispatch backend `panic_write()`.
 
-**Core rule**: Normal operation writes **zero** bytes to Flash. Flash is only touched after a fault trigger, during the non-ISR `axiom_capsule_commit()` call.
+**Core rule**: Normal capture writes **zero** bytes to Flash. Flash is touched by
+the explicit non-ISR `axiom_capsule_commit()` operation after a fault, or by the
+separate explicit `axiom_capsule_clear()` erase operation. The core does not
+reserve or map a hardware Flash partition for the capsule.
 
 ---
 
@@ -101,6 +110,10 @@ The register snapshot format is architecture-dependent, identified by a `snapsho
 
 ## 5. Target Configuration
 
+The values below are fallback definitions from `axiom_config.h`. Resource
+presets may override them; in particular, `tiny` and `prod` disable capsule
+capture unless the integrator explicitly enables it.
+
 ```c
 #ifndef AXIOM_CAPSULE_ENABLED
 #define AXIOM_CAPSULE_ENABLED 1
@@ -144,7 +157,13 @@ The register snapshot format is architecture-dependent, identified by a `snapsho
 - `AXIOM_CAPSULE_PRE_EVENTS`: Number of events to retain before fault.
 - `AXIOM_CAPSULE_POST_EVENTS`: Number of events to retain after fault.
 - `AXIOM_CAPSULE_RING_SIZE`: Maximum bytes used for captured Event Records.
-- `AXIOM_CAPSULE_FLASH_BASE` / `AXIOM_CAPSULE_FLASH_SIZE`: Port-specific Flash region used by commit/read/clear.
+- `AXIOM_CAPSULE_FLASH_BASE` / `AXIOM_CAPSULE_FLASH_SIZE`: address and erase
+  length passed to the Port Flash callbacks. The core uses
+  `BASE + offset` for capsule I/O and does not reserve, map, or validate this
+  address against a linker layout. The integrator must select a non-overlapping
+  eraseable region, satisfy device alignment/protection rules, and implement the
+  callbacks. The `0` / `8192` values above are compile-time fallbacks, not a
+  hardware partition guarantee.
 
 ---
 
@@ -164,7 +183,7 @@ uint32_t axiom_capsule_read(uint8_t *out, uint32_t max_len);
 void axiom_capsule_clear(void);
 ```
 
-`axiom_capsule_read()` synthesizes the existing capsule v1 image directly in the caller buffer; no second full RAM image is retained. `axiom_capsule_present()` validates Flash with a fixed 64-byte scratch buffer. Both Flash paths enforce magic, encoded length, and CRC-32. If Flash commit fails, the retained frame ring remains readable.
+`axiom_capsule_read()` synthesizes the existing capsule v1 image directly in the caller buffer; no second full RAM image is retained. `axiom_capsule_present()` validates Flash with a fixed 64-byte scratch buffer. Both Flash paths enforce magic, encoded length, and CRC-32. If Flash commit fails, the retained frame ring remains readable for retry or inspection.
 
 ---
 

@@ -98,6 +98,17 @@ static void emit_pre_events(uint8_t count) {
     }
 }
 
+#if AXIOM_CAPSULE_FLASH_SIZE < AXIOM_CAPSULE_MAX_IMAGE_SIZE
+static void emit_large_pre_events(uint8_t count) {
+    uint8_t payload[AXIOM_MAX_PAYLOAD_LEN];
+    memset(payload, 0x5Au, sizeof(payload));
+    for (uint8_t i = 0; i < count; ++i) {
+        axiom_write(AXIOM_LEVEL_INFO, 0x10u, (uint16_t)(0x0600u + i),
+                    payload, (uint8_t)sizeof(payload));
+    }
+}
+#endif
+
 static uint16_t read_capsule(uint8_t *buffer, uint16_t size) {
     uint32_t n = axiom_capsule_read(buffer, size);
     CHECK("read returns complete capsule", n > 0u && n <= size);
@@ -176,6 +187,45 @@ static void test_pre_window_cap(void) {
           capsule_event_id_at(capsule, len, AXIOM_CAPSULE_PRE_EVENTS) == 0x0200u);
 }
 
+static void test_fault_bypasses_filters(void) {
+    uint8_t capsule[AXIOM_CAPSULE_MAX_IMAGE_SIZE];
+    prepare_host();
+    axiom_level_mask_set(0u);
+    axiom_module_mask_set(0u);
+
+    AX_FAULT(0x23u, 0x0230u, (uint8_t)1u);
+
+    CHECK("fault bypasses filters: capsule present", axiom_capsule_present());
+    uint16_t len = read_capsule(capsule, sizeof(capsule));
+    CHECK("fault bypasses filters: one post frame", capsule[18] == 1u);
+    CHECK("fault bypasses filters: fault frame retained",
+          capsule_event_id_at(capsule, len, 0u) == 0x0230u);
+    axiom_capsule_clear();
+}
+
+static void test_fault_survives_full_drop_ring(void) {
+#if AXIOM_RING_BUFFER_POLICY == AXIOM_RING_BUFFER_POLICY_DROP
+    uint8_t capsule[AXIOM_CAPSULE_MAX_IMAGE_SIZE];
+    uint8_t payload[AXIOM_MAX_PAYLOAD_LEN] = {0};
+    const uint32_t min_full_frame = AXIOM_HEADER_LEN + 1u + 1u +
+        AXIOM_MAX_PAYLOAD_LEN + AXIOM_CRC_LEN;
+    const uint32_t fill_count = AXIOM_RING_BUFFER_SIZE / min_full_frame + 2u;
+
+    prepare_host();
+    for (uint32_t i = 0u; i < fill_count; ++i) {
+        axiom_write(AXIOM_LEVEL_INFO, 0x30u, (uint16_t)(0x3000u + i),
+                    payload, (uint8_t)sizeof(payload));
+    }
+    AX_FAULT(0x31u, 0x0310u, (uint8_t)2u);
+
+    CHECK("fault survives full ring: capsule present", axiom_capsule_present());
+    uint16_t len = read_capsule(capsule, sizeof(capsule));
+    CHECK("fault survives full ring: fault frame retained",
+          capsule_event_id_at(capsule, len, capsule[17]) == 0x0310u);
+    axiom_capsule_clear();
+#endif
+}
+
 static void test_commit_failure_keeps_ram_capsule(void) {
     uint8_t capsule[AXIOM_CAPSULE_MAX_IMAGE_SIZE];
     prepare_host();
@@ -215,12 +265,26 @@ static void test_power_loss_at_each_write_stage(void) {
     }
 }
 
+#if AXIOM_CAPSULE_FLASH_SIZE < AXIOM_CAPSULE_MAX_IMAGE_SIZE
+static void test_flash_capacity_guard(void) {
+    prepare_host();
+    g_axiom_port_flash_storage[0] = 0x3Cu;
+    emit_large_pre_events(16u);
+    AX_FAULT(0x36u, 0x0360u);
+
+    CHECK("small flash rejects oversized capsule", !axiom_capsule_commit());
+    CHECK("small flash does not erase before rejection",
+          g_axiom_port_flash_erase_calls == 0u);
+    CHECK("small flash does not write before rejection",
+          g_axiom_port_flash_write_calls == 0u);
+    CHECK("small flash preserves existing bytes",
+          g_axiom_port_flash_storage[0] == 0x3Cu);
+}
+#endif
+
+#if defined(AXIOM_CAPSULE_SMALL_TEST)
 int main(void) {
-    test_commit_read_and_clear();
-    test_pre_window_cap();
-    test_commit_failure_keeps_ram_capsule();
-    test_flash_crc_mismatch_after_reboot();
-    test_power_loss_at_each_write_stage();
+    test_flash_capacity_guard();
 
     if (failures == 0) {
         printf("test_capsule: PASSED\n");
@@ -229,3 +293,24 @@ int main(void) {
     }
     return failures;
 }
+#else
+int main(void) {
+    test_commit_read_and_clear();
+    test_pre_window_cap();
+    test_fault_bypasses_filters();
+    test_fault_survives_full_drop_ring();
+    test_commit_failure_keeps_ram_capsule();
+    test_flash_crc_mismatch_after_reboot();
+    test_power_loss_at_each_write_stage();
+#if AXIOM_CAPSULE_FLASH_SIZE < AXIOM_CAPSULE_MAX_IMAGE_SIZE
+    test_flash_capacity_guard();
+#endif
+
+    if (failures == 0) {
+        printf("test_capsule: PASSED\n");
+    } else {
+        printf("test_capsule: FAILED (%d failures)\n", failures);
+    }
+    return failures;
+}
+#endif

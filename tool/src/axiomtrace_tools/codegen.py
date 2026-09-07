@@ -85,6 +85,12 @@ def validate_event_source(
     max_payload_len: int = 128,
 ) -> list[dict[str, Any]]:
     """Validate and normalize an event source, raising ValueError on invalid data."""
+    if (
+        isinstance(max_payload_len, bool)
+        or not isinstance(max_payload_len, int)
+        or not 1 <= max_payload_len <= 255
+    ):
+        raise ValueError("max_payload_len must be an integer between 1 and 255")
     modules = normalize_event_source(data)
     if not modules:
         raise ValueError("event source must define at least one module")
@@ -188,10 +194,15 @@ def generate_assets(
     location_mode: str = "none",
     location_function: bool = False,
     source_map: dict[str, Any] | None = None,
+    max_payload_len: int = 128,
 ) -> dict[str, Path]:
     """Generate C headers and dictionary JSON from an event source."""
     data = load_event_source(events_path)
-    modules = validate_event_source(data, location_mode=location_mode)
+    modules = validate_event_source(
+        data,
+        location_mode=location_mode,
+        max_payload_len=max_payload_len,
+    )
     effective_source_map = source_map or generate_source_map(
         None,
         Path(events_path).resolve().parent,

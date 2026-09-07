@@ -7,6 +7,7 @@
 #       EVENTS ${CMAKE_SOURCE_DIR}/events.yaml
 #       OUTPUT_DIR ${CMAKE_BINARY_DIR}/axiomtrace-bundle
 #       LOCATION_MODE file_id
+#       MAX_PAYLOAD_LEN 96
 #   )
 
 include(CMakeParseArguments)
@@ -14,7 +15,7 @@ set(AXIOMTRACE_TOOLS_MODULE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 function(axiomtrace_add_bundle)
     set(options LOCATION_FUNCTION)
-    set(one_value_args TARGET EVENTS OUTPUT_DIR FIRMWARE_NAME FIRMWARE_VERSION LOCATION_MODE)
+    set(one_value_args TARGET EVENTS OUTPUT_DIR FIRMWARE_NAME FIRMWARE_VERSION LOCATION_MODE MAX_PAYLOAD_LEN)
     cmake_parse_arguments(AXIOM_BUNDLE "${options}" "${one_value_args}" "" ${ARGN})
 
     if(NOT AXIOM_BUNDLE_TARGET)
@@ -31,6 +32,25 @@ function(axiomtrace_add_bundle)
     endif()
     if(NOT AXIOM_BUNDLE_LOCATION_MODE)
         set(AXIOM_BUNDLE_LOCATION_MODE "file_id")
+    endif()
+    if(NOT AXIOM_BUNDLE_MAX_PAYLOAD_LEN)
+        string(TOLOWER "${AXIOM_PRESET}" _AXIOM_BUNDLE_PRESET)
+        if(DEFINED AXIOM_PRESET_${_AXIOM_BUNDLE_PRESET}_MAX_PAYLOAD_LEN)
+            set(AXIOM_BUNDLE_MAX_PAYLOAD_LEN
+                "${AXIOM_PRESET_${_AXIOM_BUNDLE_PRESET}_MAX_PAYLOAD_LEN}")
+        elseif(DEFINED AXIOM_MAX_PAYLOAD_LEN)
+            set(AXIOM_BUNDLE_MAX_PAYLOAD_LEN "${AXIOM_MAX_PAYLOAD_LEN}")
+        else()
+            set(AXIOM_BUNDLE_MAX_PAYLOAD_LEN 128)
+        endif()
+        string(REGEX REPLACE "[uU]$" "" AXIOM_BUNDLE_MAX_PAYLOAD_LEN
+            "${AXIOM_BUNDLE_MAX_PAYLOAD_LEN}")
+    endif()
+    if(NOT AXIOM_BUNDLE_MAX_PAYLOAD_LEN MATCHES "^[0-9]+$")
+        message(FATAL_ERROR "axiomtrace_add_bundle: MAX_PAYLOAD_LEN must be an integer between 1 and 255")
+    endif()
+    if(AXIOM_BUNDLE_MAX_PAYLOAD_LEN LESS 1 OR AXIOM_BUNDLE_MAX_PAYLOAD_LEN GREATER 255)
+        message(FATAL_ERROR "axiomtrace_add_bundle: MAX_PAYLOAD_LEN must be an integer between 1 and 255")
     endif()
     if(NOT AXIOM_BUNDLE_LOCATION_MODE MATCHES "^(none|hash|file_id)$")
         message(FATAL_ERROR "axiomtrace_add_bundle: LOCATION_MODE must be none, hash, or file_id")
@@ -92,6 +112,7 @@ function(axiomtrace_add_bundle)
     if(AXIOM_BUNDLE_LOCATION_FUNCTION)
         list(APPEND AXIOM_LOCATION_ARGS --location-function)
     endif()
+    set(AXIOM_PAYLOAD_ARGS --max-payload-len "${AXIOM_BUNDLE_MAX_PAYLOAD_LEN}")
 
     add_custom_command(
         OUTPUT
@@ -106,6 +127,7 @@ function(axiomtrace_add_bundle)
             --events "${AXIOM_BUNDLE_EVENTS}"
             --source-id-map "${AXIOM_SOURCE_ID_MAP}"
             ${AXIOM_LOCATION_ARGS}
+            ${AXIOM_PAYLOAD_ARGS}
             --out "${AXIOM_GENERATED_DIR}"
         DEPENDS "${AXIOM_BUNDLE_EVENTS}" "${AXIOM_SOURCE_ID_MAP}"
         COMMENT "Generating AxiomTrace event headers and metadata identity"
@@ -128,6 +150,7 @@ function(axiomtrace_add_bundle)
         --events "${AXIOM_BUNDLE_EVENTS}"
         --source-id-map "${AXIOM_SOURCE_ID_MAP}"
         ${AXIOM_LOCATION_ARGS}
+        ${AXIOM_PAYLOAD_ARGS}
         --out "${AXIOM_BUNDLE_OUTPUT_DIR}"
         --elf "$<TARGET_FILE:${AXIOM_BUNDLE_TARGET}>"
     )

@@ -11,19 +11,23 @@
  * ============================================================================
  *
  * ARM Cortex-M specific implementations using CoreDebug/DWT registers.
- * Works on Cortex-M3, M4, M7, M33, etc. Not M0 (no DWT_CYCCNT).
+ * DWT support is selected explicitly by AXIOM_CORTEX_M_HAS_DWT.  The safe
+ * default is no DWT, because some otherwise compatible cores (including
+ * Cortex-M23 implementations) may omit the cycle counter.
  *
- * Default weak implementations - override by providing strong symbols.
+ * These are weak defaults.  A board port may replace individual functions
+ * with strong symbols, or select a complete custom provider in CMake.
  * ============================================================================ */
 
-#if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || \
-    defined(__ARM_ARCH_8M_BASE__) || defined(__ARM_ARCH_8M_MAIN__)
-#define CORTEX_M_HAS_DWT 1
-#else
-#define CORTEX_M_HAS_DWT 0
+#ifndef AXIOM_CORTEX_M_HAS_DWT
+#define AXIOM_CORTEX_M_HAS_DWT 0
 #endif
 
-#if CORTEX_M_HAS_DWT
+#if (AXIOM_CORTEX_M_HAS_DWT != 0) && (AXIOM_CORTEX_M_HAS_DWT != 1)
+#error "AXIOM_CORTEX_M_HAS_DWT must be 0 or 1"
+#endif
+
+#if AXIOM_CORTEX_M_HAS_DWT
 /* DWT_CYCCNT 寄存器地址 (Cortex-M7 example, varies by core) */
 static volatile uint32_t * const DWT_CTRL = (uint32_t *)0xE0001000;
 static volatile uint32_t * const DWT_CYCCNT = (uint32_t *)0xE0001004;
@@ -41,8 +45,8 @@ static uint32_t axiom_port_cycles_to_us(uint32_t cycles) {
 }
 #endif
 
-uint32_t axiom_port_timestamp(void) {
-#if CORTEX_M_HAS_DWT
+AXIOM_COMPILER_WEAK uint32_t axiom_port_timestamp(void) {
+#if AXIOM_CORTEX_M_HAS_DWT
     /* 确保 DWT_CYCCNT 已启用 */
     if ((*DWT_CTRL & 0x1u) == 0u) {
         /* 启用 trace, 先解锁 DWT */
@@ -59,7 +63,7 @@ uint32_t axiom_port_timestamp(void) {
 static uint32_t g_critical_nesting;
 static uint32_t g_saved_primask;
 
-void axiom_port_critical_enter(void) {
+AXIOM_COMPILER_WEAK void axiom_port_critical_enter(void) {
     uint32_t primask;
     /* Keep the read and mask operation together so the saved state belongs to
      * the outermost critical section. */
@@ -75,7 +79,7 @@ void axiom_port_critical_enter(void) {
     g_critical_nesting++;
 }
 
-void axiom_port_critical_exit(void) {
+AXIOM_COMPILER_WEAK void axiom_port_critical_exit(void) {
     if (g_critical_nesting > 0u) {
         g_critical_nesting--;
         if (g_critical_nesting == 0u) {
@@ -84,13 +88,13 @@ void axiom_port_critical_exit(void) {
     }
 }
 
-void axiom_port_string_out(const char *str) {
+AXIOM_COMPILER_WEAK void axiom_port_string_out(const char *str) {
     /* 默认空实现 - 由具体 SoC/Board 实现提供 */
     (void)str;
 }
 
-void axiom_port_fault_hook(uint8_t module_id, uint16_t event_id,
-                           const uint8_t *payload, uint8_t payload_len) {
+AXIOM_COMPILER_WEAK void axiom_port_fault_hook(uint8_t module_id, uint16_t event_id,
+                                               const uint8_t *payload, uint8_t payload_len) {
     (void)module_id;
     (void)event_id;
     (void)payload;
@@ -98,30 +102,30 @@ void axiom_port_fault_hook(uint8_t module_id, uint16_t event_id,
     /* 可在此处添加硬件调试器集成 */
 }
 
-uint8_t axiom_port_reset_reason(void) {
+AXIOM_COMPILER_WEAK uint8_t axiom_port_reset_reason(void) {
     return 0u;
 }
 
-uint8_t axiom_port_fault_snapshot(uint8_t *buf, uint8_t max_len) {
+AXIOM_COMPILER_WEAK uint8_t axiom_port_fault_snapshot(uint8_t *buf, uint8_t max_len) {
     (void)buf;
     (void)max_len;
     return 0;
 }
 
-int axiom_port_flash_erase(uint32_t addr, uint32_t len) {
+AXIOM_COMPILER_WEAK int axiom_port_flash_erase(uint32_t addr, uint32_t len) {
     (void)addr;
     (void)len;
     return -1;  /* 需要 SoC 实现 */
 }
 
-int axiom_port_flash_write(uint32_t addr, const uint8_t *data, uint32_t len) {
+AXIOM_COMPILER_WEAK int axiom_port_flash_write(uint32_t addr, const uint8_t *data, uint32_t len) {
     (void)addr;
     (void)data;
     (void)len;
     return -1;  /* 需要 SoC 实现 */
 }
 
-int axiom_port_flash_read(uint32_t addr, uint8_t *out, uint32_t len) {
+AXIOM_COMPILER_WEAK int axiom_port_flash_read(uint32_t addr, uint8_t *out, uint32_t len) {
     (void)addr;
     (void)out;
     (void)len;

@@ -13,6 +13,8 @@
 static int be_write_count;
 static int be_flush_count;
 static bool be_panic_used;
+static int broken_flush_count;
+static int broken_drop_count;
 
 static int mock_write(const uint8_t *buf, uint16_t len, void *ctx) {
     (void)buf; (void)len; (void)ctx;
@@ -30,6 +32,17 @@ static int mock_panic_write(const uint8_t *buf, uint16_t len, void *ctx) {
     (void)buf; (void)len; (void)ctx;
     be_panic_used = true;
     return 0;
+}
+
+static int mock_broken_flush(void *ctx) {
+    (void)ctx;
+    broken_flush_count++;
+    return 0;
+}
+
+static void mock_broken_drop(uint32_t lost, void *ctx) {
+    (void)ctx;
+    broken_drop_count += (int)lost;
 }
 
 /* ---- Second mock backend for multi-backend tests ---- */
@@ -53,6 +66,8 @@ static void reset_mocks(void) {
     be_write_count = 0;
     be_flush_count = 0;
     be_panic_used = false;
+    broken_flush_count = 0;
+    broken_drop_count = 0;
     be2_write_count = 0;
 }
 
@@ -166,7 +181,8 @@ static void test_backend_degradation_and_recovery(void) {
     /* AXIOM_BACKEND_MAX is typically 4. Register a failing backend. */
     static const axiom_backend_t broken_be = AXIOM_BACKEND_INIT(
         .name = "broken", .caps = AXIOM_BACKEND_CAP_UART,
-        .write = mock_fail_write);
+        .write = mock_fail_write, .flush = mock_broken_flush,
+        .on_drop = mock_broken_drop);
 
     int ret = axiom_backend_register(&broken_be);
     CHECK("degradation: register broken success", ret == 0);
@@ -185,6 +201,10 @@ static void test_backend_degradation_and_recovery(void) {
     g_axiom_port_simulated_time += 500000u; /* +0.5s */
     axiom_backend_dispatch(frame, sizeof(frame));
     CHECK("degradation: still isolated at 0.5s", axiom_backend_active_count() == active_before - 1);
+    CHECK("degradation: disabled frame diagnosed", broken_drop_count == 6);
+    axiom_backend_flush_all();
+    CHECK("degradation: disabled flush skipped", broken_flush_count == 0);
+    CHECK("degradation: healthy backend still flushed", be_flush_count == 1);
 
     /* 3. Simulate time crossing recovery window (1.0s) and wrapping around 32-bit bound */
     g_axiom_port_simulated_time = 1000 + 1000005u; /* +1.000005s */
@@ -193,7 +213,8 @@ static void test_backend_degradation_and_recovery(void) {
     CHECK("degradation: auto-recovered after timeout", axiom_backend_active_count() == active_before);
     axiom_diagnostics_t diagnostics;
     axiom_diagnostics_get(&diagnostics);
-    CHECK("degradation: backend failures diagnosed", diagnostics.backend >= 6u);
+    CHECK("degradation: backend failures diagnosed", diagnostics.backend >= 7u);
+    CHECK("degradation: recovered frame drop diagnosed", broken_drop_count == 7);
 }
 
 int main(void) {

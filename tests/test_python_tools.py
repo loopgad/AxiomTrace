@@ -696,6 +696,28 @@ class TestToolchain:
         with pytest.raises(ValueError, match="payload exceeds"):
             validate_event_source(source, location_mode="file_id")
 
+    def test_codegen_uses_explicit_max_payload_len(self, tmp_path):
+        source = {
+            "dictionary": {
+                "modules": [{
+                    "id": 1,
+                    "name": "TEST",
+                    "events": [{
+                        "id": 1,
+                        "name": "VALUE",
+                        "text": "value={value:u16}",
+                        "args": [{"name": "value", "type": "u16"}],
+                    }],
+                }]
+            }
+        }
+        source_path = tmp_path / "events.json"
+        source_path.write_text(json.dumps(source), encoding="utf-8")
+
+        generate_assets(source_path, tmp_path / "fits", max_payload_len=2)
+        with pytest.raises(ValueError, match="payload exceeds"):
+            generate_assets(source_path, tmp_path / "too-small", max_payload_len=1)
+
     def test_metadata_identity_ignores_derived_source_indexes(self):
         source_map = {
             "schema": "axiomtrace.source_map.v1",
@@ -740,6 +762,32 @@ class TestToolchain:
 
         with pytest.raises(ValueError, match="manifest root"):
             load_bundle(manifest)
+
+    def test_bundle_rejects_artifacts_outside_root(self, tmp_path, sample_events_source):
+        source = tmp_path / "events.json"
+        bundle_dir = tmp_path / "axiomtrace-bundle"
+        source.write_text(json.dumps(sample_events_source), encoding="utf-8")
+        generated = generate_bundle(source, bundle_dir)
+        manifest = json.loads(generated["manifest"].read_text(encoding="utf-8"))
+        outside = tmp_path / "outside.json"
+        outside.write_text("{}", encoding="utf-8")
+
+        for artifact_value in ("../outside.json", str(outside)):
+            manifest["artifacts"]["dictionary"] = artifact_value
+            generated["manifest"].write_text(json.dumps(manifest), encoding="utf-8")
+            with pytest.raises(ValueError, match="escapes bundle root"):
+                load_bundle(generated["manifest"])
+
+        link = bundle_dir / "dictionary-link.json"
+        try:
+            link.symlink_to(outside)
+        except (OSError, NotImplementedError):
+            pass
+        else:
+            manifest["artifacts"]["dictionary"] = link.name
+            generated["manifest"].write_text(json.dumps(manifest), encoding="utf-8")
+            with pytest.raises(ValueError, match="escapes bundle root"):
+                load_bundle(generated["manifest"])
 
     def test_source_map_rejects_malformed_json_containers(self, tmp_path):
         source_map_path = tmp_path / "source_map.json"

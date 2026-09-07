@@ -32,7 +32,7 @@ frontend/  ->  core/  ->  backend/
 ```text
 baremetal/ports/
 ├── CMakeLists.txt              # host/cortex-m/riscv 选择器
-├── generic/                    # Host 和默认弱符号实现
+├── generic/                    # Host/default provider（支持的 ELF 编译器上可用 weak defaults）
 ├── arch/
 │   ├── cortex-m/               # Cortex-M 架构实现
 │   └── riscv/                  # RISC-V 架构实现
@@ -84,6 +84,12 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+安装后的 CMake 包将 Core 与 Port provider 分开导出。消费方应同时链接
+`AxiomTrace::axiomtrace` 与包构建时选择的 `AxiomTrace::port`；Host 包还可
+使用 `AxiomTrace::port_generic`。若应用通过 `AXIOM_PORT_SOURCE=NONE`
+完整提供 Port，则不要链接 generic provider，也不要期待 `find_package`
+自动发现厂商 SDK。
+
 交叉编译时显式指定架构和工具链：
 
 ```sh
@@ -96,7 +102,7 @@ cmake --build build-cortex-m
 
 ## 5. 使用厂商 Port 映射
 
-三套厂商目录在 1.0 RC 都是 reference-only map：它们不包含或编译
+三套厂商目录在 v1.0.0 都是 reference-only map：它们不包含或编译
 寄存器/RTT 驱动，不搜索任意 SDK 路径，也不注入 CPU/ABI/板卡参数。统一的
 可编译 callback skeleton 位于 `baremetal/examples/example_custom_port.c`；
 把它复制进真实固件并替换所有 TODO，再使核心构建显式使用外部 Port：
@@ -167,5 +173,5 @@ idf_component_register(
 - 目标平台：使用真实交叉编译器检查启动、Port、链接脚本和资源预算。
 
 最后一次修改 Port 后，应同步更新 `docs/reference/DIR_STRUCTURE.md`、README 的平台说明和 `docs/changelog/CHANGELOG*.md`。
-在 1.0 RC 阶段，只有真实工具链/SDK 项目的交叉编译和时序报告才能把
+在 v1.0.0 阶段，只有真实工具链/SDK 项目的交叉编译和时序报告才能把
 Integrator 状态提升为 measured；Host CTest 不冒充硬件验证。

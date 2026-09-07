@@ -45,7 +45,13 @@ class AxiomBundle:
             return None
         if not isinstance(value, str):
             raise ValueError(f"bundle artifact path must be a string: {key}")
-        return (self.root / value).resolve()
+        root = self.root.resolve()
+        artifact = (root / value).resolve()
+        try:
+            artifact.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(f"bundle artifact path escapes bundle root: {key}") from exc
+        return artifact
 
     def load_dictionary(self) -> EventDictionary | None:
         return load_dictionary(self.artifact_path("dictionary"))
@@ -61,7 +67,11 @@ def load_bundle(path: str | Path) -> AxiomBundle:
     with manifest_path.open("r", encoding="utf-8") as handle:
         manifest = json.load(handle)
     _validate_manifest(manifest)
-    return AxiomBundle(manifest_path.parent.resolve(), manifest)
+    bundle = AxiomBundle(manifest_path.parent.resolve(), manifest)
+    for key, value in manifest["artifacts"].items():
+        if value:
+            bundle.artifact_path(key)
+    return bundle
 
 
 def find_bundle(start_path: str | Path | None = None) -> Path | None:
@@ -104,6 +114,7 @@ def generate_bundle(
     firmware_version: str | None = None,
     location_mode: str | None = None,
     location_function: bool = False,
+    max_payload_len: int = 128,
 ) -> dict[str, Path]:
     """Generate a standard metadata bundle."""
     out_dir = Path(out)
@@ -124,6 +135,7 @@ def generate_bundle(
         location_mode=selected_location_mode,
         location_function=location_function,
         source_map=source_map,
+        max_payload_len=max_payload_len,
     )
 
     dictionary_path = out_dir / "dictionary.json"

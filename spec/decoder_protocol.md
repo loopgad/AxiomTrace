@@ -8,7 +8,10 @@
 
 ## 1. Overview
 
-The AxiomTrace decoder toolchain runs on the host (Linux/macOS/Windows) and converts binary Event Records / Fault Capsules into human-readable forms.
+The AxiomTrace decoder toolchain runs on the host (Linux/macOS/Windows) and
+converts raw binary Event Records into human-readable forms. Fault Capsule
+layout and RAM/Flash extraction are specified separately; they are not
+auto-detected input modes of the public decoder command.
 
 **Components**:
 
@@ -39,17 +42,18 @@ A raw memory dump containing the ring buffer metadata + raw ring data:
 └─────────────┴─────────────┴─────────────┴─────────────────────────────┘
 ```
 
-```bash
-axiom-decoder trace_ram.bin --bundle build/axiomtrace-bundle --format raw
-```
+This layout is a storage format, not a separate v1.0 CLI mode. The public
+`axiom-decoder` command currently accepts a raw Frame Body stream; the
+integrator must extract valid frames from a memory image before passing them to
+the decoder.
 
 ### 2.3 Capsule Binary
 
 A fault capsule committed to Flash. See `spec/fault_capsule.md` for layout.
-
-```bash
-axiom-decoder capsule.bin --bundle build/axiomtrace-bundle --format raw
-```
+The public `axiom-decoder` command does not auto-detect or unwrap a capsule
+envelope, and v1.0 does not promise a capsule-specific CLI command. Integrators
+must read the capsule through their platform/integration path and provide the
+embedded Event Record stream to the raw decoder if needed.
 
 ---
 
@@ -91,9 +95,15 @@ Type hints (`{u8}`, `{i16}`, `{f32}`) define the packed v2 payload layout used d
 ]
 ```
 
-### 3.3 Capsule Report
+### 3.3 Raw Output
 
-Markdown or HTML report containing:
+`raw` preserves frame structure fields and does not require a dictionary or
+bundle. It is the supported output for structurally decoding a raw Frame Body
+stream.
+
+### 3.4 Capsule Report Boundary
+
+The capsule report field set is defined by `spec/fault_capsule.md`, including:
 
 - Fault summary (time, reset reason, fault type)
 - Register snapshot (pc, lr, sp, xpsr, etc.)
@@ -101,6 +111,10 @@ Markdown or HTML report containing:
 - Post-fault event sequence
 - Firmware hash
 - Drop statistics
+
+The report shape is a format specification, not a public `axiom-decoder`
+output mode in v1.0. Do not pass a capsule envelope directly to
+`axiom-decoder --format raw` and expect the capsule header to be interpreted.
 
 ---
 

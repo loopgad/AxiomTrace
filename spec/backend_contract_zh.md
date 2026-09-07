@@ -49,7 +49,7 @@ typedef struct {
 | `write` | `int (*)(...)` | 是 | 传输一个完整的帧。必须是中断安全（IRQ-safe）的或在临界区调用。成功返回 0，忙返回 `-EAGAIN`，错误返回负数。 |
 | `ready` | `int (*)(void*)` | 否 | 如果后端可以接受数据，则返回非零值。在 `write` 之前调用，以避免不必要的丢弃。 |
 | `flush` | `int (*)(void*)` | 否 | 排空任何内部缓冲区。由用户显式调用或在关闭期间调用。 |
-| `panic_write` | `int (*)(...)` | 否 | 在故障/崩溃上下文中使用的备用写入。必须尽可能简单（例如，轮询 UART 字节输出）。如果为 NULL，则使用 `write`。 |
+| `panic_write` | `int (*)(...)` | 否 | 仅在应用/集成代码显式调用 `axiom_backend_panic_write()` 时使用的备用写入。必须尽可能简单（例如，轮询 UART 字节输出）。如果为 NULL，该显式 API 会回退到 `write`；Core 不会自动调用它。 |
 | `on_drop` | `void (*)(...)` | 否 | 当核心丢弃旨在发送到此后端的帧时调用的回调。`lost` = 连续丢弃的帧数。 |
 | `ctx` | `void *` | 否 | 传递给所有回调的用户上下文指针。 |
 
@@ -96,7 +96,7 @@ typedef enum {
    - 对于每个已注册的后端，核心调用 `ready()`（如果非 NULL）。
    - 如果已就绪，核心调用 `write()` 并传入完整的帧缓冲区。
    - 如果 `write()` 失败或 `ready()` 返回 false，Core 增加公开 backend 诊断计数并调用 `on_drop()`（如果非 NULL）。这与 Core ingress 的 `DROP_SUMMARY` 统计分离。
-3. **故障时**：如果发生故障，核心尝试在所有提供该功能的后端上执行 `panic_write()`。
+3. **故障时**：Core 不会在发出 fault event 时隐式分发 `panic_write()`。故障处理代码可以显式调用 `axiom_backend_panic_write(frame, len)`；该 API 会尝试所有已注册后端，并在 `panic_write` 为 NULL 时回退到 `write`。
 4. **刷新**：普通代码调用 `axiom_flush()`，先排空 Core ring，再刷新 Backend 缓冲；`axiom_backend_flush_all()` 只调用 Backend flush callback。
 
 ---

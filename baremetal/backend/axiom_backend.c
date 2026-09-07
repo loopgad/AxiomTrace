@@ -62,6 +62,13 @@ void axiom_backend_dispatch(const uint8_t *frame, uint16_t len) {
                 s_be_disabled[i] = false;
                 s_be_error_count[i] = 0;
             } else {
+                /* The core ring has already consumed this frame.  A
+                 * soft-disabled backend therefore still owns a backend-level
+                 * drop, just like a failed write/ready check below. */
+                axiom_diagnostics_note_backend(1u);
+                if (be->on_drop) {
+                    be->on_drop(1u, be->ctx);
+                }
                 continue; /* still in recovery window — skip */
             }
         }
@@ -99,6 +106,13 @@ void axiom_backend_dispatch(const uint8_t *frame, uint16_t len) {
 void axiom_backend_flush_all(void) {
     for (uint8_t i = 0; i < s_backend_count; ++i) {
         const axiom_backend_t *be = s_backends[i];
+#if AXIOM_BACKEND_DEGRADATION
+        /* A disabled transport must not run its flush side effects while it
+         * is isolated.  Healthy backends still flush independently. */
+        if (s_be_disabled[i]) {
+            continue;
+        }
+#endif
         if (be->flush) {
             (void)be->flush(be->ctx);
         }

@@ -8,7 +8,10 @@
 
 ## 1. 概览
 
-AxiomTrace decoder 工具链运行在主机端，将 MCU 输出的二进制 Event Records / Fault Capsules 转换为人类可读格式。固件侧只输出二进制事实，语义解释由主机端 dictionary 和标准 metadata bundle 完成。
+AxiomTrace decoder 工具链运行在主机端，将 MCU 输出的原始二进制 Event
+Records 转换为人类可读格式。Fault Capsule 以及 RAM/Flash 提取方式另行
+定义，并不是公共 decoder 命令会自动识别的输入模式；固件侧只输出二进制
+事实，语义解释由主机端 dictionary 和标准 metadata bundle 完成。
 
 **组件：**
 
@@ -31,19 +34,16 @@ axiom-decoder trace.bin --bundle build/axiomtrace-bundle --format text
 
 ### 2.2 内存转储
 
-内存转储包含 ring metadata 和 raw ring 数据。首版工具链可以先以 raw 结构化输出为目标，后续补全 memory 输入模式。
-
-```bash
-axiom-decoder trace_ram.bin --bundle build/axiomtrace-bundle --format raw
-```
+内存转储包含 ring metadata 和 raw ring 数据。这是存储布局，不是 v1.0
+独立 CLI 模式。当前公开的 `axiom-decoder` 只接受原始 Frame Body stream；
+集成方必须先从内存镜像中提取有效帧，再交给 decoder 做结构化解码。
 
 ### 2.3 Fault Capsule
 
-Fault Capsule 二进制格式见 `spec/fault_capsule_zh.md`。首版工具链先保证 raw decode 和 bundle 匹配，完整 fault report 在 capsule report 阶段实现。
-
-```bash
-axiom-decoder capsule.bin --bundle build/axiomtrace-bundle --format raw
-```
+Fault Capsule 二进制格式见 `spec/fault_capsule_zh.md`。公开的
+`axiom-decoder` 不会自动识别或剥离 capsule envelope；v1.0 也不承诺
+独立的 capsule CLI 命令。集成方应通过平台路径读取 capsule，需要时只将
+其中的 Event Record stream 提供给 raw decoder。
 
 ---
 
@@ -76,6 +76,13 @@ axiom-decoder capsule.bin --bundle build/axiomtrace-bundle --format raw
 ### 3.3 Raw 输出
 
 `raw` 保留 frame 结构字段，不依赖 dictionary 或 bundle，适合固件身份不匹配或调试损坏输入时使用。
+
+### 3.4 Capsule 报告边界
+
+`spec/fault_capsule_zh.md` 定义 capsule 报告所需的字段，包括故障摘要、寄存器
+快照、故障前/故障后事件序列、固件 hash 与丢失统计。该字段集合是格式规范，
+不是 v1.0 公共 `axiom-decoder` 的输出模式。不要直接将 capsule envelope
+传给 `axiom-decoder --format raw` 并期待 decoder 解释 capsule 报头。
 
 ---
 

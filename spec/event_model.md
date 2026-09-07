@@ -42,12 +42,12 @@ _Static_assert(_Alignof(axiom_event_header_t) == 1, "header align");
 |-------|-----------|-----------------------------------------|---------------------------|
 | 0     | `DEBUG`   | Verbose diagnostic information          | Droppable, rate-limited   |
 | 1     | `INFO`    | Normal operational events               | Default output level      |
-| 2     | `WARN`    | Unexpected but recoverable condition    | Always retained           |
-| 3     | `ERROR`   | Failure that may affect operation       | Always retained           |
-| 4     | `FAULT`   | Critical fault; triggers capsule freeze | Always retained; invokes `axiom_port_fault_hook()` |
+| 2     | `WARN`    | Unexpected but recoverable condition    | Subject to the level mask and Core ring policy |
+| 3     | `ERROR`   | Failure that may affect operation       | Subject to the level mask and Core ring policy |
+| 4     | `FAULT`   | Critical fault; starts enabled capsule capture | Bypasses level/module masks; Core preserves the complete frame when it can be assembled and invokes `axiom_port_fault_hook()` |
 | 5-15  | reserved  | Reserved for future use                 | —                         |
 
-**Level filtering**: A 32-bit mask controls which levels are emitted. `DEBUG` may be dropped under memory pressure or rate limiting.
+**Level filtering**: A 32-bit mask controls which ordinary levels are emitted. `FAULT` and the fixed `DROP_SUMMARY` system event bypass the level/module masks. Ordinary events may still be dropped by filtering or Core ring pressure; a capsule is only populated when it is enabled and the frame reaches the capsule observer.
 
 ---
 

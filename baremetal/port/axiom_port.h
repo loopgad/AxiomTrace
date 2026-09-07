@@ -11,7 +11,8 @@ extern "C" {
 
 /* ---------------------------------------------------------------------------
  * Port layer — override by providing strong-symbol implementations.
- * Default weak implementations are in axiom_port_generic.c.
+ * Shipped generic and architecture providers use weak defaults where the
+ * compiler supports weak symbols.
  * --------------------------------------------------------------------------- */
 
 /* Monotonic timestamp in microseconds. The uint32_t value wraps naturally;

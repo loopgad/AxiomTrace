@@ -53,6 +53,13 @@ static uint16_t s_seq;
 static axiom_filter_t s_filter;
 static axiom_timestamp_ctx_t s_ts_ctx;
 
+static bool axiom_event_bypasses_filter(axiom_level_t level, uint8_t module_id,
+                                        uint16_t event_id) {
+    return level == AXIOM_LEVEL_FAULT ||
+        (module_id == AXIOM_SYSTEM_MODULE_ID &&
+         event_id == AXIOM_SYSTEM_EVENT_DROP_SUMMARY);
+}
+
 static void axiom_record_drop(uint8_t module_id, uint16_t event_id) {
     axiom_port_critical_enter();
     axiom_filter_drop(&s_filter, module_id, event_id);
@@ -64,7 +71,6 @@ void axiom_internal_record_encode_drop(uint8_t module_id, uint16_t event_id) {
     axiom_diagnostics_note_encode_overflow(1u);
 }
 
-#if AXIOM_RING_BUFFER_POLICY == AXIOM_RING_BUFFER_POLICY_OVERWRITE
 /* Called only while the caller owns the port critical section. */
 static uint16_t axiom_ring_peek_locked(uint8_t *out, uint16_t max_len) {
     uint32_t head = s_ring.head;
@@ -95,11 +101,11 @@ static bool axiom_ring_oldest_frame(uint16_t *frame_len, uint8_t *module_id,
     *event_id = (uint16_t)frame[4] | (uint16_t)((uint16_t)frame[5] << 8u);
     return true;
 }
-#endif
 
 /* Called with the port critical section held. */
 static bool axiom_ring_make_space(uint16_t frame_len, uint8_t module_id,
-                                  uint16_t event_id, uint32_t *dropped) {
+                                  uint16_t event_id, bool preserve,
+                                  uint32_t *dropped) {
     uint32_t used = s_ring.head - s_ring.tail;
     *dropped = 0u;
     if (used + frame_len <= s_ring.capacity) {
@@ -107,10 +113,33 @@ static bool axiom_ring_make_space(uint16_t frame_len, uint8_t module_id,
     }
 
 #if AXIOM_RING_BUFFER_POLICY == AXIOM_RING_BUFFER_POLICY_DROP
-    axiom_filter_drop(&s_filter, module_id, event_id);
-    *dropped = 1u;
-    return false;
+    if (!preserve) {
+        axiom_filter_drop(&s_filter, module_id, event_id);
+        *dropped = 1u;
+        return false;
+    }
+
+    /* Critical FAULT records must reach the Capsule observer even when the
+     * normal DROP-new policy has filled the Core ring. Evict complete oldest
+     * frames only for this exceptional path; ordinary events remain O(1)
+     * DROP-new. */
+    while (used + frame_len > s_ring.capacity) {
+        uint16_t old_len = 0u;
+        uint8_t old_module = module_id;
+        uint16_t old_event = event_id;
+        if (!axiom_ring_oldest_frame(&old_len, &old_module, &old_event)) {
+            s_ring.tail = s_ring.head;
+            (*dropped)++;
+            break;
+        }
+        s_ring.tail += old_len;
+        axiom_filter_drop(&s_filter, old_module, old_event);
+        (*dropped)++;
+        used = s_ring.head - s_ring.tail;
+    }
+    return true;
 #else
+    (void)preserve;
     while (used + frame_len > s_ring.capacity) {
         uint16_t old_len = 0u;
         uint8_t old_module = module_id;
@@ -201,7 +230,8 @@ void axiom_write(axiom_level_t level, uint8_t module_id, uint16_t event_id,
         return;
     }
 
-    if (!axiom_filter_check(&s_filter, level, module_id)) {
+    if (!axiom_event_bypasses_filter(level, module_id, event_id) &&
+        !axiom_filter_check(&s_filter, level, module_id)) {
         /* CS protects drop_count read-modify-write from concurrent ISR races */
         axiom_port_critical_enter();
         axiom_filter_drop(&s_filter, module_id, event_id);
@@ -245,7 +275,8 @@ void axiom_write(axiom_level_t level, uint8_t module_id, uint16_t event_id,
     /* frame_len = header(8) + ts + payload_len(1) + payload + CRC(2) */
     uint16_t frame_len = (uint16_t)(pos + 1u + payload_len + 2u);
     uint32_t ring_dropped = 0u;
-    if (!axiom_ring_make_space(frame_len, module_id, event_id, &ring_dropped)) {
+    if (!axiom_ring_make_space(frame_len, module_id, event_id,
+                               level == AXIOM_LEVEL_FAULT, &ring_dropped)) {
         axiom_port_critical_exit();
         axiom_diagnostics_note_ring_full(ring_dropped);
         return;
@@ -318,7 +349,8 @@ void axiom_write(axiom_level_t level, uint8_t module_id, uint16_t event_id,
         return;
     }
 
-    if (!axiom_filter_check(&s_filter, level, module_id)) {
+    if (!axiom_event_bypasses_filter(level, module_id, event_id) &&
+        !axiom_filter_check(&s_filter, level, module_id)) {
         /* CS protects drop_count read-modify-write from concurrent ISR races */
         axiom_port_critical_enter();
         axiom_filter_drop(&s_filter, module_id, event_id);
@@ -338,7 +370,8 @@ void axiom_write(axiom_level_t level, uint8_t module_id, uint16_t event_id,
     uint16_t total_len = (uint16_t)(8u + ts_len + 1u + payload_len + 2u);
 
     uint32_t ring_dropped = 0u;
-    if (!axiom_ring_make_space(total_len, module_id, event_id, &ring_dropped)) {
+    if (!axiom_ring_make_space(total_len, module_id, event_id,
+                               level == AXIOM_LEVEL_FAULT, &ring_dropped)) {
         axiom_port_critical_exit();
         axiom_diagnostics_note_ring_full(ring_dropped);
         return;
