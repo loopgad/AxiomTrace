@@ -240,7 +240,7 @@ run_fast_mode() {
 
     # Step 5: pytest
     run_step "pytest" \
-        "run_python -m pytest -q"
+        "run_python -m pytest -q tests"
 
     # Step 6: Golden check
     run_step "Golden check" \
