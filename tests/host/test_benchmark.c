@@ -397,6 +397,30 @@ static double full_pipeline_fn(uint8_t *buf, uint8_t *pos, axiom_ring_t *ring,
 }
 
 /* ============================================================================
+ * B8: write+flush drain — capsule pre-window eviction is live
+ *     Each iteration writes a FOC event and drains the ring, so the main
+ *     ring never fills: axiom_capsule_observe_frame() stays reachable and
+ *     the pre-window evicts the oldest frame per event. The ring-full
+ *     steady state of B1-B3 short-circuits before the capsule (DROP-new
+ *     early return) and hides this cost entirely. Metric: one write+flush
+ *     pair, reported as informational (not FOC-gated).
+ * ============================================================================ */
+static double drain_flush_fn(uint8_t *buf, uint8_t *pos, axiom_ring_t *ring,
+                              uint8_t *ring_data, uint32_t ring_size, uint32_t *drops) {
+    (void)ring; (void)ring_data; (void)ring_size; (void)drops;
+    axiom_enc_f32(buf, pos, 1.234f);       /* Iα */
+    axiom_enc_f32(buf, pos, 5.678f);       /* Iβ */
+    axiom_enc_f32(buf, pos, 3.14159f);     /* θ_e */
+    axiom_enc_f32(buf, pos, 1000.0f);      /* ω_e */
+    axiom_enc_u16(buf, pos, 5000);         /* duty_a */
+    axiom_enc_u16(buf, pos, 5000);         /* duty_b */
+    axiom_enc_u16(buf, pos, 5000);         /* duty_c */
+    axiom_write(AXIOM_LEVEL_INFO, 0x01, 0x0100, buf, *pos);
+    axiom_flush();
+    return 0;
+}
+
+/* ============================================================================
  * CRC-16 standalone benchmark (50000 iterations)
  * ============================================================================ */
 static void bench_crc16(void) {
@@ -524,6 +548,11 @@ int main(void) {
     printf("[B7] Full encode pipeline (10 types, no axiom_write)\n");
     results[idx++] = run_multi_round("B7:encode_pipe", full_pipeline_fn,
         &ring, ring_256, 256, BENCH_ITER_PER_ROUND, BENCH_ROUNDS, false);
+
+    /* B8: write+flush drain — capsule pre-window eviction is live */
+    printf("[B8] Write+flush drain (28B payload, ring never fills)\n");
+    results[idx++] = run_multi_round("B8:write_flush_drain", drain_flush_fn,
+        &ring, ring_4096, 4096, BENCH_ITER_PER_ROUND, BENCH_ROUNDS, false);
 
     printf("\n");
 
