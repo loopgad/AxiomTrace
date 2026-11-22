@@ -906,6 +906,10 @@ class TestToolchain:
         # fixture gates run for real instead of failing on the probe.
         if os.environ.get("AXIOM_TEST_C_COMPILER"):
             fixture_cmd.append(f"-DCMAKE_C_COMPILER={os.environ['AXIOM_TEST_C_COMPILER']}")
+        # Run the fixture's codegen with the interpreter executing this test:
+        # it carries the tool dependencies, while whatever find_package(Python3)
+        # discovers may be a bare system python without them.
+        fixture_cmd.append(f"-DPython3_EXECUTABLE={sys.executable}")
         subprocess.run(
             fixture_cmd,
             check=True,

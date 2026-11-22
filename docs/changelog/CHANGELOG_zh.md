@@ -21,6 +21,7 @@
 
 ### 修复
 - 流解码器：声明载荷超过剩余输入的帧按 wire-format §6.2 单字节推进并恢复解码，不再丢弃截断点之后的全部帧。
+- CMake bundle fixture：codegen 步骤改用正在执行测试的解释器（带工具依赖），而非 `find_package(Python3)` 找到的任意裸系统解释器——这一直是 Python tooling CI job 自 fixture 引入以来失败的原因。
 
 ## [1.0.0] - 2026-08-25
 

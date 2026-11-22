@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Stream decoder: a frame declaring more payload than available now advances one byte and resumes decoding per wire-format §6.2 instead of dropping every frame behind the truncation.
+- CMake bundle fixture: the codegen step now runs with the interpreter executing the tests (which has the tool dependencies) instead of whatever `find_package(Python3)` discovers — this had failed the Python tooling CI job on every push since the fixture landed.
 
 ## [1.0.0] - 2026-08-25
 
