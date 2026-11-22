@@ -120,7 +120,7 @@ jobs:
           python-version-file: tool/.python-version
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --project tool --extra test --locked
-      - run: uv run --project tool --extra test python -m pytest -q
+      - run: uv run --project tool --extra test python -m pytest -q tests
       - run: uv run --project tool --extra test python -m compileall -q tool/src tests
       - run: uv run --project tool --extra test python tool/golden/update_golden.py --check
       - run: uv run --project tool --extra test axiom-validate --golden tool/golden
