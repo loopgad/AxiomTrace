@@ -895,13 +895,19 @@ class TestToolchain:
         fixture = repository / "tests" / "cmake" / "bundle_fixture"
         build = tmp_path / f"fixture-build-{location_mode}"
         trace = tmp_path / "fixture.bin"
+        fixture_cmd = [
+            "cmake", "-S", str(fixture), "-B", str(build), "-G", "Ninja",
+            f"-DAXIOMTRACE_ROOT={repository.as_posix()}",
+            "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+            f"-DAXIOM_FIXTURE_LOCATION_MODE={location_mode}",
+        ]
+        # ci.sh exports the compiler that actually links on this machine when
+        # the default clang cannot (missing MSVC runtime); honor it so the
+        # fixture gates run for real instead of failing on the probe.
+        if os.environ.get("AXIOM_TEST_C_COMPILER"):
+            fixture_cmd.append(f"-DCMAKE_C_COMPILER={os.environ['AXIOM_TEST_C_COMPILER']}")
         subprocess.run(
-            [
-                "cmake", "-S", str(fixture), "-B", str(build), "-G", "Ninja",
-                f"-DAXIOMTRACE_ROOT={repository.as_posix()}",
-                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-                f"-DAXIOM_FIXTURE_LOCATION_MODE={location_mode}",
-            ],
+            fixture_cmd,
             check=True,
             capture_output=True,
             text=True,

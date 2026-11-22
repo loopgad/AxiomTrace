@@ -222,9 +222,43 @@ run_step() {
 run_fast_mode() {
     log_header "Fast Mode"
 
-    # Step 1: CMake configure (clang)
-    run_step "CMake configure (clang)" \
-        "cmake -S . -B build-local -G Ninja -DAXIOM_BUILD_TESTS=ON -DAXIOM_BUILD_EXAMPLES=ON -DCMAKE_C_COMPILER=clang"
+    # Resolve the fast-mode C compiler once. clang is preferred; a clang whose
+    # default target links against an absent MSVC runtime fails even the
+    # compiler probe (lld-link: cannot open msvcrtd.lib), so probe with a
+    # trivial program and fall back to gcc. The choice is exported so the
+    # pytest cmake fixtures configure with the same working compiler.
+    if [ -z "${AXIOM_TEST_C_COMPILER:-}" ]; then
+        if echo 'int main(void){return 0;}' | clang -x c - -o /tmp/axiom_cc_probe 2>/dev/null; then
+            AXIOM_TEST_C_COMPILER="clang"
+        else
+            AXIOM_TEST_C_COMPILER="gcc"
+            log_info "clang cannot link on this machine; fast mode falls back to gcc"
+        fi
+        export AXIOM_TEST_C_COMPILER
+    fi
+
+    # Earlier sandboxed runs may have left __pycache__ directories owned by
+    # another account; redirect all bytecode to a writable prefix so
+    # compileall and imports never write next to the sources.
+    export PYTHONPYCACHEPREFIX="${TMPDIR:-/tmp}/axiom-pycache"
+
+    # A build tree first configured with a clang keeps clang-only flags in
+    # its cached CMAKE_C_FLAGS_* (e.g. -Xclang -gcodeview, which CMake adds
+    # for MSVC-targeting clang debug builds); those flags persist when the
+    # tree is later reconfigured with gcc and fail the build. Start clean
+    # when the resolved compiler is gcc but the cache still carries
+    # clang-only flags. Clang trees are left untouched. Earlier runs may
+    # have left sandbox-owned subdirectories that cannot be removed; they
+    # are inert for CMake, so removal failures are tolerated.
+    if [ -f build-local/CMakeCache.txt ] && [ "$AXIOM_TEST_C_COMPILER" = "gcc" ] \
+        && grep -q -- "-Xclang" build-local/CMakeCache.txt 2>/dev/null; then
+        log_info "build-local cache carries clang-only flags; removing the stale build tree"
+        rm -rf build-local 2>/dev/null || true
+    fi
+
+    # Step 1: CMake configure (resolved compiler)
+    run_step "CMake configure (${AXIOM_TEST_C_COMPILER})" \
+        "cmake -S . -B build-local -G Ninja -DAXIOM_BUILD_TESTS=ON -DAXIOM_BUILD_EXAMPLES=ON -DCMAKE_C_COMPILER=${AXIOM_TEST_C_COMPILER} || { rm -rf build-local 2>/dev/null || true; cmake -S . -B build-local -G Ninja -DAXIOM_BUILD_TESTS=ON -DAXIOM_BUILD_EXAMPLES=ON -DCMAKE_C_COMPILER=${AXIOM_TEST_C_COMPILER}; }"
 
     # Step 2: CMake build
     run_step "CMake build" \
@@ -271,7 +305,7 @@ int main(void) {
     return 0;
 }
 SMOKE_EOF
-clang -std=gnu11 -Wall -Wextra -Werror -Idist /tmp/axiomtrace_smoke.c -o /tmp/axiomtrace_smoke && /tmp/axiomtrace_smoke"
+${AXIOM_TEST_C_COMPILER} -std=gnu11 -Wall -Wextra -Werror -Idist /tmp/axiomtrace_smoke.c -o /tmp/axiomtrace_smoke && /tmp/axiomtrace_smoke"
 
     # Step 10: Doc link check
     run_step "Doc link check" \
