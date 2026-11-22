@@ -150,7 +150,7 @@ def decode_frame(
     payload_start = payload_len_offset + 1
     frame_end = payload_start + payload_len + 2
     if frame_end > len(raw):
-        return _error("TRUNCATED"), len(raw)
+        return _error("TRUNCATED"), offset + 1
 
     crc_expected = struct.unpack_from("<H", raw, payload_start + payload_len)[0]
     crc_actual = crc16_ccitt_false(raw[start:payload_start + payload_len])

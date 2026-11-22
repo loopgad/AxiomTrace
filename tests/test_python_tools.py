@@ -214,6 +214,25 @@ class TestDecoder:
         assert result[-1]["event_id"] == 0x0001
         assert "error" not in result[-1]
 
+    def test_decode_stream_resynchronizes_after_truncated_frame(self, valid_frame):
+        """A frame declaring more payload than available must not swallow the rest.
+
+        Wire format §6.2 requires single-byte advance after any validation
+        failure; a mid-stream truncation previously terminated the whole stream
+        and dropped every frame behind it.
+        """
+        # Valid header + real first timestamp byte, then a payload_len of 255
+        # with only 19 trailing bytes: frame_end exceeds the buffer end.
+        truncated = valid_frame[:8] + bytes([valid_frame[8]]) + b"\xFF" + b"\x13" * 19
+        stream = bytes(truncated) + valid_frame
+
+        result = decode_stream(stream)
+
+        assert any(frame.get("error") == "TRUNCATED" for frame in result)
+        assert "error" not in result[-1]
+        assert result[-1]["module_id"] == 0x10
+        assert result[-1]["event_id"] == 0x0001
+
     @pytest.mark.parametrize(
         "payload",
         [
