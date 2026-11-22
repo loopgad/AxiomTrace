@@ -253,6 +253,19 @@
 #endif
 
 /* ---------------------------------------------------------------------------
+ * CRC-16 slice-by-4 (optional)
+ * When enabled, axiom_crc16 processes four bytes per step using five extra
+ * 256-entry tables (2.5 KB ROM over the 512 B byte table), breaking the
+ * serial crc->index->table dependency chain of the byte-wise loop. Bit-exact
+ * with the byte-wise implementation; test_crc_slice4 locks the equivalence
+ * into CI. Keep it off on ROM-constrained presets: the default 256 B byte
+ * table is unchanged when disabled.
+ * --------------------------------------------------------------------------- */
+#ifndef AXIOM_CRC_SLICE4
+#define AXIOM_CRC_SLICE4 0
+#endif
+
+/* ---------------------------------------------------------------------------
  * Runtime Self-Test (NEW)
  * When enabled, axiom_selftest() validates CRC, ring buffer, and encoder
  * at boot time. Returns true if all checks pass.

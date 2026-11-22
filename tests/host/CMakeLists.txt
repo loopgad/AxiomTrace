@@ -18,6 +18,27 @@ add_executable(test_crc test_crc.c)
 target_link_libraries(test_crc PRIVATE axiomtrace)
 add_test(NAME test_crc COMMAND test_crc)
 
+# Compile the core with AXIOM_CRC_SLICE4=1 and rerun the CRC vectors: the
+# slice-by-4 path must stay bit-exact with the byte-wise table. The five
+# extra tables cost 2.5 KB ROM, hence the explicit opt-in instead of a
+# default-on switch.
+add_library(axiomtrace_crc_slice4 STATIC ${AXIOM_CORE_SOURCES})
+target_compile_features(axiomtrace_crc_slice4 PUBLIC c_std_11)
+target_include_directories(axiomtrace_crc_slice4 PUBLIC
+    ${CMAKE_SOURCE_DIR}/baremetal
+    ${CMAKE_SOURCE_DIR}/baremetal/include
+    ${CMAKE_SOURCE_DIR}/baremetal/port
+    ${CMAKE_SOURCE_DIR}/baremetal/core
+    ${CMAKE_SOURCE_DIR}/baremetal/frontend
+    ${CMAKE_SOURCE_DIR}/baremetal/backend)
+target_compile_definitions(axiomtrace_crc_slice4 PUBLIC
+    AXIOM_PRESET=0
+    AXIOM_CRC_SLICE4=1
+    AXIOM_HOST_TESTING=1)
+add_executable(test_crc_slice4 test_crc.c)
+target_link_libraries(test_crc_slice4 PRIVATE axiomtrace_crc_slice4)
+add_test(NAME test_crc_slice4 COMMAND test_crc_slice4)
+
 add_executable(test_cobs test_cobs.c)
 target_link_libraries(test_cobs PRIVATE axiomtrace)
 add_test(NAME test_cobs COMMAND test_cobs)
