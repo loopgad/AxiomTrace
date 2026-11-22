@@ -187,6 +187,50 @@ static void test_pre_window_cap(void) {
           capsule_event_id_at(capsule, len, AXIOM_CAPSULE_PRE_EVENTS) == 0x0200u);
 }
 
+static void test_eviction_tracks_variable_frame_lengths(void) {
+    uint8_t capsule[AXIOM_CAPSULE_MAX_IMAGE_SIZE];
+    prepare_host();
+
+    /* Alternating payload sizes make every frame a different length, so the
+     * eviction path must re-parse each oldest frame's length from its prefix.
+     * Equal-length frames (the host default) cannot distinguish a correct
+     * mechanism from one that caches a stale length. */
+    uint8_t small[8] = {0};
+    uint8_t large[64];
+    memset(large, 0x3Cu, sizeof(large));
+    for (uint8_t i = 0; i < AXIOM_CAPSULE_PRE_EVENTS + 4u; ++i) {
+        if (i % 2u == 0u) {
+            axiom_write(AXIOM_LEVEL_INFO, 0x40u, (uint16_t)(0x0400u + i),
+                        large, (uint8_t)sizeof(large));
+        } else {
+            axiom_write(AXIOM_LEVEL_INFO, 0x40u, (uint16_t)(0x0400u + i),
+                        small, (uint8_t)sizeof(small));
+        }
+    }
+    AX_FAULT(0x41u, 0x0500u, (uint8_t)3u);
+
+    CHECK("variable-length commit succeeds", axiom_capsule_commit());
+    uint16_t len = read_capsule(capsule, sizeof(capsule));
+    CHECK("variable-length capsule crc", capsule_crc_ok(capsule, len));
+    CHECK("variable-length pre window capped", capsule[17] == AXIOM_CAPSULE_PRE_EVENTS);
+    CHECK("variable-length frame count",
+          count_capsule_frames(capsule, len) == (uint8_t)(AXIOM_CAPSULE_PRE_EVENTS + 1u));
+
+    /* After mixed-length evictions every retained pre frame must still sit on
+     * an exact frame boundary and keep emission order: the four oldest frames
+     * (i = 0..3) were evicted, so pre frame k carries event 0x0400 + 4 + k. */
+    bool order_ok = true;
+    for (uint8_t k = 0; k < AXIOM_CAPSULE_PRE_EVENTS; ++k) {
+        if (capsule_event_id_at(capsule, len, k) != (uint16_t)(0x0400u + 4u + k)) {
+            order_ok = false;
+        }
+    }
+    CHECK("variable-length eviction keeps frame boundaries aligned", order_ok);
+    CHECK("variable-length fault retained at window end",
+          capsule_event_id_at(capsule, len, AXIOM_CAPSULE_PRE_EVENTS) == 0x0500u);
+    axiom_capsule_clear();
+}
+
 static void test_fault_bypasses_filters(void) {
     uint8_t capsule[AXIOM_CAPSULE_MAX_IMAGE_SIZE];
     prepare_host();
@@ -297,6 +341,7 @@ int main(void) {
 int main(void) {
     test_commit_read_and_clear();
     test_pre_window_cap();
+    test_eviction_tracks_variable_frame_lengths();
     test_fault_bypasses_filters();
     test_fault_survives_full_drop_ring();
     test_commit_failure_keeps_ram_capsule();

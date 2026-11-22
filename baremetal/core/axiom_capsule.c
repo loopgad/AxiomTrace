@@ -142,14 +142,18 @@ static void frame_ring_append(const uint8_t *frame, uint16_t len) {
 }
 
 static bool frame_ring_evict_oldest(void) {
-    uint8_t frame[AXIOM_MAX_FRAME_LEN];
-    uint16_t available = s_frame_used;
+    /* The oldest frame is about to be discarded, so its total length is
+     * parsed from the 14-byte prefix instead of copying the whole frame and
+     * re-running the table CRC per event inside the write critical section.
+     * Write-side CRC already covered every frame; the commit path re-verifies
+     * the whole image with CRC-32, and a corrupt prefix lands in the same
+     * reset branch as before. */
+    uint8_t prefix[AXIOM_FRAME_PREFIX_LEN];
+    uint16_t used = s_frame_used;
+    uint16_t prefix_len = (used < (uint16_t)sizeof(prefix)) ? used : (uint16_t)sizeof(prefix);
     uint16_t frame_len = 0u;
-    if (available > sizeof(frame)) {
-        available = sizeof(frame);
-    }
-    frame_ring_copy_out(0u, frame, available);
-    if (!axiom_frame_validate(frame, available, &frame_len)) {
+    frame_ring_copy_out(0u, prefix, prefix_len);
+    if (!axiom_frame_prefix_len(prefix, prefix_len, used, &frame_len)) {
         s_frame_head = 0u;
         s_frame_used = 0u;
         s_pre_window_count = 0u;

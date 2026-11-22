@@ -92,13 +92,20 @@ static uint16_t axiom_ring_peek_locked(uint8_t *out, uint16_t max_len) {
 
 static bool axiom_ring_oldest_frame(uint16_t *frame_len, uint8_t *module_id,
                                     uint16_t *event_id) {
-    uint8_t frame[AXIOM_MAX_FRAME_LEN];
-    uint16_t available = axiom_ring_peek_locked(frame, sizeof(frame));
-    if (!axiom_frame_validate(frame, available, frame_len)) {
+    /* The oldest frame is about to be discarded, so its total length can be
+     * parsed from the 14-byte prefix: the per-eviction full-frame copy and
+     * CRC re-validation previously ran inside the held critical section and
+     * dominated the FAULT/OVERWRITE eviction cost. The flush path still
+     * validates CRC per frame and resynchronizes past corrupt bytes. */
+    uint8_t prefix[AXIOM_FRAME_PREFIX_LEN];
+    uint32_t used = s_ring.head - s_ring.tail;
+    uint16_t peek_len = (used < sizeof(prefix)) ? (uint16_t)used : (uint16_t)sizeof(prefix);
+    (void)axiom_ring_peek_locked(prefix, peek_len);
+    if (!axiom_frame_prefix_len(prefix, peek_len, (uint16_t)used, frame_len)) {
         return false;
     }
-    *module_id = frame[3];
-    *event_id = (uint16_t)frame[4] | (uint16_t)((uint16_t)frame[5] << 8u);
+    *module_id = prefix[3];
+    *event_id = (uint16_t)prefix[4] | (uint16_t)((uint16_t)prefix[5] << 8u);
     return true;
 }
 
