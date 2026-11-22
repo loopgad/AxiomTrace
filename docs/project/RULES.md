@@ -42,12 +42,12 @@ The following behaviors are **strictly prohibited** in `axiom_write()` and all I
 
 **Allowed Items**:
 - Packed frame encoding with a short critical section.
-- Default DROP-new strategy for bounded O(1) ring-full handling; optional OVERWRITE may discard complete validated frames only and is bounded by maximum frame size.
+- Default DROP-new strategy for bounded O(1) ring-full handling; optional OVERWRITE may discard complete oldest frames identified by header-and-length validation (eviction does not re-run CRC; the flush path re-validates) and is bounded by maximum frame size.
 - Incremental CRC (streaming calculation without re-reading memory).
 - Writing to RAM Ring (single critical section).
 - Updating global drop counter (`volatile uint32_t` increment).
 - Lightweight timestamp (reading 32-bit counter or delta encoding).
-- CRC-16 lookup table (256B ROM table, single loop).
+- CRC-16 lookup table (256B ROM table, single loop); optional slice-by-4 via `AXIOM_CRC_SLICE4` adds 2.5 KB ROM and is bit-exact.
 - `_Generic` type dispatch (compile-time resolution, zero runtime overhead).
 
 ---
@@ -169,7 +169,7 @@ Merge
 ### 9.1 Daily Maintenance
 
 - **Iteration Start**: Check `ROUTE.md` goals, ensure no scope creep.
-- **Each Commit**: Run host `ctest` plus `python -m pytest -q` locally before pushing.
+- **Each Commit**: Run host `ctest` plus `python -m pytest -q tests` locally before pushing.
 - **Protocol Tweaks**: Run `python tool/golden/update_golden.py --check` first; commit regenerated golden frames only when the wire contract intentionally changes.
 - **Weekly**: Check `tests/` coverage; add tests for any uncovered new code.
 

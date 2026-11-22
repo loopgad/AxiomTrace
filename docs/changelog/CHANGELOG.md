@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Optional CRC-16 slice-by-4 via `AXIOM_CRC_SLICE4=1`: five extra 256-entry tables (2.5 KB ROM over the byte table), bit-exact with the byte-wise loop; `test_crc_slice4` locks the equivalence into CI. Default off.
+- Benchmark scenario `B8:write_flush_drain` making the per-event capsule pre-window eviction cost visible (the ring-full steady state of B1-B3 short-circuits before the capsule and hides it); `docs/reference/benchmark.md` baseline refreshed.
+- Variable-length frame regression tests for the capsule pre-window and core-ring OVERWRITE eviction paths (equal-length host frames could not catch stale-length eviction mechanisms).
+
+### Changed
+- Capsule pre-window and core-ring (FAULT/OVERWRITE) eviction parse the oldest frame's total length from its 14-byte prefix instead of copying up to 144 bytes and re-running the table CRC inside the write critical section. Flush-side CRC validation and resynchronization are unchanged; RULES.md OVERWRITE wording updated to match.
+- CI pytest collection is scoped to `tests/` in ci.yml and RULES.md, matching ci.sh.
+
+### Fixed
+- Stream decoder: a frame declaring more payload than available now advances one byte and resumes decoding per wire-format §6.2 instead of dropping every frame behind the truncation.
+
 ## [1.0.0] - 2026-08-25
 
 ### Added

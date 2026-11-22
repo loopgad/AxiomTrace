@@ -42,12 +42,12 @@ AxiomTrace 是一个 **MCU 裸机可观测微内核**。我们的坚定目标：
 
 **允许项**：
 - Packed 帧编码与短临界区写入。
-- 默认 DROP 新帧，保证环满处理为有界 O(1)；可选 OVERWRITE 只能丢弃经过校验的完整旧帧，循环由最大帧长约束。
+- 默认 DROP 新帧，保证环满处理为有界 O(1)；可选 OVERWRITE 只能丢弃经头与长度校验的完整最老帧（逐出侧不重跑 CRC，排空侧逐帧重校验），循环由最大帧长约束。
 - 增量式 CRC（流式计算，无需重复读取内存）。
 - 写 RAM Ring（单次临界区）。
 - 更新全局 drop counter (`volatile uint32_t` 自增)。
 - 轻量 timestamp（32-bit 计数器读取或 delta 编码）。
-- CRC-16 查表（256B ROM 表，单次循环）。
+- CRC-16 查表（256B ROM 表，单次循环）；可选经 `AXIOM_CRC_SLICE4` 启用 slice-by-4，额外占用 2.5KB ROM，位精确等价。
 - `_Generic` 类型分发（编译期解析，零运行时开销）。
 
 ---
@@ -169,7 +169,7 @@ PR 评审（至少 1 人评审，检查是否违反 RULES.md）
 ### 9.1 日常维护
 
 - **每轮迭代开始**：检查 `ROUTE.md` 当前阶段目标，确认无范围蔓延。
-- **每次 commit**：本地运行 host `ctest` 与 `python -m pytest -q` 通过后再 push。
+- **每次 commit**：本地运行 host `ctest` 与 `python -m pytest -q tests` 通过后再 push。
 - **每次协议微调**：先运行 `python tool/golden/update_golden.py --check`；只有 wire 契约确实变更时才提交重新生成的 golden frames。
 - **每周**：检查 `tests/` 覆盖率，未覆盖的新增代码必须补测试。
 
