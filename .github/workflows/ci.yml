@@ -124,7 +124,7 @@ jobs:
       # of assuming a pre-built tree.
       - name: Build golden encoder
         run: |
-          cmake -S . -B build-golden -G Ninja -DAXIOM_PLATFORM=host
+          cmake -S . -B build-golden -G Ninja -DAXIOM_PLATFORM=host -DAXIOM_BUILD_TESTS=ON
           cmake --build build-golden --target generate_golden
       - run: uv run --project tool --extra test python -m pytest -q tests
       - run: uv run --project tool --extra test python -m compileall -q tool/src tests
