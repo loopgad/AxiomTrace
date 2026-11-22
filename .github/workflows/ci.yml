@@ -120,9 +120,15 @@ jobs:
           python-version-file: tool/.python-version
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --project tool --extra test --locked
+      # The golden check drives the C encoder, so this job builds it instead
+      # of assuming a pre-built tree.
+      - name: Build golden encoder
+        run: |
+          cmake -S . -B build-golden -G Ninja -DAXIOM_PLATFORM=host
+          cmake --build build-golden --target generate_golden
       - run: uv run --project tool --extra test python -m pytest -q tests
       - run: uv run --project tool --extra test python -m compileall -q tool/src tests
-      - run: uv run --project tool --extra test python tool/golden/update_golden.py --check
+      - run: uv run --project tool --extra test python tool/golden/update_golden.py --check --encoder build-golden/tests/host/generate_golden
       - run: uv run --project tool --extra test axiom-validate --golden tool/golden
       - run: uv run --project tool --extra test python scripts/release_checks.py
 
