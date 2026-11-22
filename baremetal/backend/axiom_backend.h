@@ -119,6 +119,16 @@ uint8_t axiom_backend_active_count(void);
  * Returns count regardless of degradation state. */
 uint8_t axiom_backend_count(void);
 
+#if defined(AXIOM_HOST_TESTING)
+/* Host tests only: clear the backend registry. Test binaries run several
+ * axiom_init() + register() cycles; without a reset, entries left behind by
+ * earlier tests keep being dispatched, and stack-local descriptors of earlier
+ * tests dangle. axiom_init() deliberately keeps the registry (backends are
+ * boot-time configuration), so tests get this explicit reset instead.
+ * Not compiled outside host-test builds. */
+void axiom_backend_test_reset(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

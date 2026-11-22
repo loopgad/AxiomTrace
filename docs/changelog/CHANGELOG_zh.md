@@ -10,6 +10,7 @@
 ## [未发布]
 
 ### 新增
+- 仅主机测试可用的 `axiom_backend_test_reset()` 在测试间清空后端注册表；生产构建中 `axiom_init()` 保持启动期注册不变。
 - 可选 CRC-16 slice-by-4（`AXIOM_CRC_SLICE4=1`）：在字节表之上增加五张 256 项表（2.5KB ROM），与逐字节实现位精确等价；`test_crc_slice4` 把等价性锁定进 CI。默认关闭。
 - 基准新场景 `B8:write_flush_drain`，使胶囊预窗逐出的每事件成本可见（B1-B3 的环满稳态在进入胶囊前即早退，完全掩盖该成本）；`docs/reference/benchmark.md` 基线同步刷新。
 - 胶囊预窗与核心环 OVERWRITE 逐出路径的变长帧回归用例（等长 host 帧无法发现长度记录过期的错误机制）。

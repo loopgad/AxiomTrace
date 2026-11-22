@@ -7,7 +7,7 @@
 #include "axiom_ring.h"
 
 static void test_complete_frame_overwrite(void) {
-    uint8_t capture[8192] = {0};
+    uint8_t capture[2048] = {0};
     axiom_memory_backend_ctx_t memory_context;
     axiom_backend_t memory = axiom_backend_memory(
         "overwrite", capture, sizeof(capture), &memory_context);
@@ -40,44 +40,7 @@ static void test_complete_frame_overwrite(void) {
     CHECK("overwrite: capture contains frames", frames > 0u);
     CHECK("overwrite: no partial trailing bytes", offset == memory_context.head);
 
-    /* Phase 2: variable-length OVERWRITE churn. Mixed payload sizes make
-     * every evicted frame a different length; the eviction loop must parse
-     * each oldest frame's length from its prefix instead of reusing a stale
-     * value. The flush afterwards must still yield a contiguous chain of
-     * complete frames with no shifted boundaries. Phase 2 reuses this
-     * function's registration: axiom_init() does not reset the backend
-     * registry, so a second registration would leave the first test's
-     * stack-local descriptor dangling in the table. */
-    uint8_t small[6] = {0};
-    uint8_t large[80];
-    memset(large, 0x2Du, sizeof(large));
-    for (uint16_t i = 0u; i < 100u; ++i) {
-        if (i % 2u == 0u) {
-            axiom_write(AXIOM_LEVEL_INFO, 2u, (uint16_t)(0x500u + i),
-                        large, (uint8_t)sizeof(large));
-        } else {
-            axiom_write(AXIOM_LEVEL_INFO, 2u, (uint16_t)(0x500u + i),
-                        small, (uint8_t)sizeof(small));
-        }
-    }
-    axiom_flush();
 
-    uint32_t varlen_offset = offset;
-    uint32_t varlen_frames = 0u;
-    while (varlen_offset < memory_context.head) {
-        uint16_t frame_len = 0u;
-        CHECK("overwrite-varlen: every retained record validates",
-              axiom_frame_validate(capture + varlen_offset,
-                                   (uint16_t)(memory_context.head - varlen_offset),
-                                   &frame_len));
-        if (frame_len == 0u) {
-            break;
-        }
-        varlen_offset += frame_len;
-        varlen_frames++;
-    }
-    CHECK("overwrite-varlen: capture contains frames", varlen_frames > 0u);
-    CHECK("overwrite-varlen: no partial trailing bytes", varlen_offset == memory_context.head);
 }
 
 static void test_peek_consume_snapshot(void) {
@@ -106,8 +69,55 @@ static void test_peek_consume_snapshot(void) {
           axiom_ring_consume_if(&ring, tail_snapshot, sizeof(out)));
 }
 
+static void test_overwrite_eviction_tracks_variable_frame_lengths(void) {
+    uint8_t capture[8192] = {0};
+    axiom_memory_backend_ctx_t memory_context;
+    axiom_backend_t memory = axiom_backend_memory(
+        "overwrite-varlen", capture, sizeof(capture), &memory_context);
+    axiom_init();
+    axiom_backend_test_reset();
+    CHECK("overwrite-varlen: memory registered",
+          axiom_backend_register(&memory) == AXIOM_BACKEND_OK);
+
+    /* Mixed payload sizes make every evicted frame a different length; the
+     * OVERWRITE eviction loop must parse each oldest frame's length from its
+     * prefix, not reuse a stale value. The registry reset above keeps this
+     * test independent of the registrations made by earlier tests. */
+    uint8_t small[6] = {0};
+    uint8_t large[80];
+    memset(large, 0x2Du, sizeof(large));
+    for (uint16_t i = 0u; i < 100u; ++i) {
+        if (i % 2u == 0u) {
+            axiom_write(AXIOM_LEVEL_INFO, 2u, (uint16_t)(0x500u + i),
+                        large, (uint8_t)sizeof(large));
+        } else {
+            axiom_write(AXIOM_LEVEL_INFO, 2u, (uint16_t)(0x500u + i),
+                        small, (uint8_t)sizeof(small));
+        }
+    }
+    axiom_flush();
+
+    uint32_t offset = 0u;
+    uint32_t frames = 0u;
+    while (offset < memory_context.head) {
+        uint16_t frame_len = 0u;
+        CHECK("overwrite-varlen: every retained record validates",
+              axiom_frame_validate(capture + offset,
+                                   (uint16_t)(memory_context.head - offset),
+                                   &frame_len));
+        if (frame_len == 0u) {
+            break;
+        }
+        offset += frame_len;
+        frames++;
+    }
+    CHECK("overwrite-varlen: capture contains frames", frames > 0u);
+    CHECK("overwrite-varlen: no partial trailing bytes", offset == memory_context.head);
+}
+
 int main(void) {
     test_complete_frame_overwrite();
+    test_overwrite_eviction_tracks_variable_frame_lengths();
     test_peek_consume_snapshot();
     TEST_RESULT("test_core_overwrite", failures);
     return failures;

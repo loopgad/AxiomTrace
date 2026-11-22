@@ -150,3 +150,16 @@ uint8_t axiom_backend_active_count(void) {
 uint8_t axiom_backend_count(void) {
     return s_backend_count;
 }
+
+#if defined(AXIOM_HOST_TESTING)
+void axiom_backend_test_reset(void) {
+    s_backend_count = 0;
+#if AXIOM_BACKEND_DEGRADATION
+    for (uint8_t i = 0; i < AXIOM_BACKEND_MAX; ++i) {
+        s_be_disabled[i] = false;
+        s_be_error_count[i] = 0;
+        s_be_disabled_at[i] = 0;
+    }
+#endif
+}
+#endif

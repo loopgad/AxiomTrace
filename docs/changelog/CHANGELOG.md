@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Host-test-only `axiom_backend_test_reset()` clears the backend registry between tests; `axiom_init()` keeps boot-time registration unchanged in production builds.
 - Optional CRC-16 slice-by-4 via `AXIOM_CRC_SLICE4=1`: five extra 256-entry tables (2.5 KB ROM over the byte table), bit-exact with the byte-wise loop; `test_crc_slice4` locks the equivalence into CI. Default off.
 - Benchmark scenario `B8:write_flush_drain` making the per-event capsule pre-window eviction cost visible (the ring-full steady state of B1-B3 short-circuits before the capsule and hides it); `docs/reference/benchmark.md` baseline refreshed.
 - Variable-length frame regression tests for the capsule pre-window and core-ring OVERWRITE eviction paths (equal-length host frames could not catch stale-length eviction mechanisms).
