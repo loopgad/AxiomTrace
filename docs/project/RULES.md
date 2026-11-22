@@ -177,7 +177,7 @@ Merge
 
 1. Confirm all `ROUTE.md` tasks for the stage are complete.
 2. Run host C matrix: Clang and GCC builds, then `ctest --test-dir <build-dir> --output-on-failure` for each.
-3. Run Python/tooling matrix: `python -m pytest -q`, `python -m compileall -q tool/src tests`, and `PYTHONPATH=tool/src python -m axiomtrace_tools.cli validate --golden tool/golden`.
+3. Run Python/tooling matrix: `python -m pytest -q tests`, `python -m compileall -q tool/src tests`, and `PYTHONPATH=tool/src python -m axiomtrace_tools.cli validate --golden tool/golden`.
 4. Run golden verification: `python tool/golden/update_golden.py --check`.
 5. Run preset smoke builds for `custom`, `tiny`, `prod`, `field`, and `dev` with `AXIOM_BUILD_TESTS=OFF`.
 6. Run integration: on Windows use Git Bash for `./tests/test_integration.sh`.

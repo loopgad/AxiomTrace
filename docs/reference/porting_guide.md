@@ -166,7 +166,7 @@ idf_component_register(
 
 - Host：`cmake --build`、`ctest --test-dir build --output-on-failure`。
 - Python 工具：先 `uv sync --project tool --extra test`，再
-  `uv run --project tool --extra test python -m pytest -q`；没有 uv 时在
+  `uv run --project tool --extra test python -m pytest -q tests`；没有 uv 时在
   `.venv` 内执行 `python -m pip install './tool[test]'`。
 - 单头文件：运行 `tool/scripts/amalgamate.py` 并编译单 implementation TU。
 - 文档与版本：运行 `python scripts/release_checks.py`。

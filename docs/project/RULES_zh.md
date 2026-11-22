@@ -177,7 +177,7 @@ PR 评审（至少 1 人评审，检查是否违反 RULES.md）
 
 1. 从 `ROUTE.md` 确认当前阶段所有任务已完成。
 2. 运行 host C 矩阵：Clang 与 GCC 分别构建，并对每个构建目录运行 `ctest --test-dir <build-dir> --output-on-failure`。
-3. 运行 Python/tooling 矩阵：`python -m pytest -q`、`python -m compileall -q tool/src tests`、`PYTHONPATH=tool/src python -m axiomtrace_tools.cli validate --golden tool/golden`。
+3. 运行 Python/tooling 矩阵：`python -m pytest -q tests`、`python -m compileall -q tool/src tests`、`PYTHONPATH=tool/src python -m axiomtrace_tools.cli validate --golden tool/golden`。
 4. 运行 golden 校验：`python tool/golden/update_golden.py --check`。
 5. 对 `custom`、`tiny`、`prod`、`field`、`dev` 运行 preset smoke build，使用 `AXIOM_BUILD_TESTS=OFF` 验证每个资源档位都能编译。
 6. 运行集成脚本：Windows 下使用 Git Bash 执行 `./tests/test_integration.sh`。
